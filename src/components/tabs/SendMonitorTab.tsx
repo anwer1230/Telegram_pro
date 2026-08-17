@@ -300,393 +300,364 @@ export const SendMonitorTab: React.FC<SendMonitorTabProps> = ({
   return (
     <div
       dir="rtl"
-      className="w-full flex justify-center bg-[#f5f7fa] py-3 px-2 sm:px-4 text-[#1e2a3a] font-sans antialiased select-none rounded-2xl"
+      className="w-full text-zinc-100 font-sans antialiased select-none"
     >
-      <div className="w-full max-w-[480px] bg-white min-h-[90vh] p-4 rounded-2xl shadow-[0_0_20px_rgba(0,0,0,0.06)] border border-[#e9edf2] flex flex-col gap-2.5">
+      <div className="w-full max-w-6xl mx-auto flex flex-col gap-4">
         
-        {/* Header */}
-        <div className="flex items-center gap-3 py-2 border-b border-[#e9edf2]">
-          {onBack && (
-            <button
-              className="bg-transparent border-none text-[#5a6b7c] text-2xl cursor-pointer p-1 hover:text-blue-500 transition-colors leading-none"
-              onClick={onBack}
-              title="رجوع"
-            >
-              ‹
-            </button>
-          )}
-          <h2 className="text-[#1e2a3a] text-lg m-0 font-semibold flex items-center gap-2">
-            <span>📤</span> الإرسال والمراقبة
-          </h2>
-        </div>
-
-        {/* حالة المراقبة */}
-        <div className="bg-[#f8f9fc] rounded-xl p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] border border-[#e9edf2] flex items-center gap-2.5">
-          <span
-            className={`w-2.5 h-2.5 rounded-full inline-block transition-colors ${
-              isMonitoring
-                ? 'bg-[#28a745] animate-[pulse_1.5s_infinite]'
-                : 'bg-[#adb5bd]'
-            }`}
-          />
-          <span className="text-sm font-medium text-[#1e2a3a]">
-            {isMonitoring ? 'المراقبة: تعمل ✅' : 'المراقبة: متوقفة'}
-          </span>
-        </div>
-
-        {/* الرسالة */}
-        <div className="bg-[#f8f9fc] rounded-xl p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] border border-[#e9edf2]">
-          <span className="text-[#5a6b7c] text-[13px] block mb-1 font-medium">📝 الرسالة</span>
-          <textarea
-            id="messageText"
-            rows={3}
-            value={messageText}
-            onChange={(e) => setMessageText(e.target.value)}
-            placeholder="اكتب الرسالة..."
-            className="w-full p-2.5 rounded-lg border border-[#d9e0e8] bg-white text-[#1e2a3a] text-sm outline-none focus:border-[#2a92e7] focus:ring-2 focus:ring-[#2a92e7]/15 transition-all resize-y"
-          />
-        </div>
-
-        {/* رفع الصور */}
-        <div className="bg-[#f8f9fc] rounded-xl p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] border border-[#e9edf2]">
-          <span className="text-[#5a6b7c] text-[13px] block mb-1 font-medium">📷 إضافة صور</span>
-          <div
-            className="border-2 border-dashed border-[#cdd5df] rounded-xl p-4 text-center cursor-pointer transition-all bg-[#fafbfc] hover:border-[#2a92e7] hover:bg-[#f0f7ff]"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <i className="fas fa-cloud-upload-alt text-3xl text-[#6c7a8a] mb-1.5 block" />
-            <div className="text-[#2d3e4f] text-[13px] font-medium">اضغط لاختيار الصور</div>
-            <div className="text-[#6c7a8a] text-[11px]">يدعم: JPG, PNG, GIF, WebP</div>
-            <input
-              type="file"
-              ref={fileInputRef}
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => handleImages(e.target.files)}
-            />
+        {/* حالة المراقبة & شريط المؤشرات */}
+        <div className="bg-zinc-900/90 rounded-2xl p-4 shadow-xl border border-zinc-800 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-amber-500/15 rounded-xl text-amber-400 border border-amber-500/30">
+              <i className="fas fa-paper-plane text-lg" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`w-3 h-3 rounded-full inline-block transition-colors ${
+                    isMonitoring
+                      ? 'bg-emerald-500 animate-[pulse_1.5s_infinite] shadow-lg shadow-emerald-500/50'
+                      : 'bg-zinc-600'
+                  }`}
+                />
+                <h3 className="text-sm sm:text-base font-bold text-white">
+                  {isMonitoring ? 'محرك المراقبة والجدولة: يعمل بنشاط ✅' : 'محرك المراقبة والجدولة: متوقف حالياً'}
+                </h3>
+              </div>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                تحديد المجموعات المستهدفة، فلاتر الكلمات المراقبة، التخطي التلقائي، وجدولة الإرسال
+              </p>
+            </div>
           </div>
 
-          {/* Image preview */}
-          {uploadedImages.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-2">
-              {uploadedImages.map((img, i) => (
-                <div
-                  key={i}
-                  className="w-[60px] h-[60px] rounded-lg overflow-hidden relative bg-[#e9edf2] border border-[#d9e0e8]"
-                >
-                  <img src={img.data} alt={img.name} className="w-full h-full object-cover" />
-                  <button
-                    className="absolute -top-1 -right-1 w-[18px] h-[18px] rounded-full bg-[#dc3545] text-white border-none text-[10px] flex items-center justify-center cursor-pointer shadow"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeImage(i);
-                    }}
-                    title="حذف"
+          <div className="flex items-center gap-2">
+            {!isMonitoring ? (
+              <button
+                className="py-2 px-4 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold rounded-xl text-xs sm:text-sm transition-all flex items-center gap-2 shadow-lg shadow-amber-500/20"
+                onClick={startMonitoring}
+              >
+                <i className="fas fa-play" />
+                <span>بدء المراقبة التلقائية</span>
+              </button>
+            ) : (
+              <button
+                className="py-2 px-4 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs sm:text-sm transition-all flex items-center gap-2 shadow-lg shadow-rose-600/20"
+                onClick={stopMonitoring}
+              >
+                <i className="fas fa-stop" />
+                <span>إيقاف المراقبة</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 2-Column Responsive Workspace Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          
+          {/* Left / Main Column: Message & Media & Groups */}
+          <div className="lg:col-span-7 space-y-4">
+            
+            {/* الرسالة */}
+            <div className="bg-zinc-900/80 rounded-2xl p-4 shadow-xl border border-zinc-800/80">
+              <span className="text-zinc-300 text-xs font-bold block mb-2">📝 نص الرسالة التلقائية</span>
+              <textarea
+                id="messageText"
+                rows={4}
+                value={messageText}
+                onChange={(e) => setMessageText(e.target.value)}
+                placeholder="اكتب نص الرسالة التي ترغب بإرسالها للمجموعات..."
+                className="w-full p-3 rounded-xl border border-zinc-700/80 bg-zinc-950 text-zinc-100 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all resize-y placeholder:text-zinc-500"
+              />
+            </div>
+
+            {/* رفع الصور والوسائط */}
+            <div className="bg-zinc-900/80 rounded-2xl p-4 shadow-xl border border-zinc-800/80">
+              <span className="text-zinc-300 text-xs font-bold block mb-2">📷 إرفاق وسائط وصور</span>
+              <div
+                className="border-2 border-dashed border-zinc-700 rounded-xl p-4 text-center cursor-pointer transition-all bg-zinc-950/60 hover:border-amber-500/60 hover:bg-zinc-900/50"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <i className="fas fa-cloud-upload-alt text-2xl text-zinc-400 mb-1 block" />
+                <div className="text-zinc-200 text-xs font-semibold">اضغط لاختيار الصور أو المستندات</div>
+                <div className="text-zinc-500 text-[10px] mt-0.5">يدعم: JPG, PNG, GIF, WebP</div>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handleImages(e.target.files)}
+                />
+              </div>
+
+              {/* Image preview */}
+              {uploadedImages.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {uploadedImages.map((img, i) => (
+                    <div
+                      key={i}
+                      className="w-16 h-16 rounded-xl overflow-hidden relative bg-zinc-800 border border-zinc-700 group"
+                    >
+                      <img src={img.data} alt={img.name} className="w-full h-full object-cover" />
+                      <button
+                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-rose-600 text-white border-none text-[10px] flex items-center justify-center cursor-pointer shadow hover:scale-110 transition-transform"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeImage(i);
+                        }}
+                        title="حذف"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* المجموعات المستهدفة */}
+            <div className="bg-zinc-900/80 rounded-2xl p-4 shadow-xl border border-zinc-800/80">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-zinc-300 text-xs font-bold">👥 المجموعات والقنوات المستهدفة</span>
+                <div className="flex items-center gap-2 cursor-pointer" onClick={toggleAllGroups}>
+                  <div
+                    className={`w-9 h-5 rounded-full cursor-pointer transition-colors relative shrink-0 ${
+                      allGroupsSelected ? 'bg-amber-500' : 'bg-zinc-700'
+                    }`}
                   >
-                    ✕
+                    <div
+                      className={`absolute top-0.5 right-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow ${
+                        allGroupsSelected ? '-translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </div>
+                  <span className="text-zinc-300 text-xs font-medium">
+                    {allGroupsSelected ? '✅ كل المجموعات' : 'تحديد كل المجموعات'}
+                  </span>
+                </div>
+              </div>
+
+              <textarea
+                id="groupsInput"
+                rows={3}
+                value={groupsInput}
+                onChange={(e) => setGroupsInput(e.target.value)}
+                disabled={allGroupsSelected}
+                placeholder="ضع روابط المجموعات (https://t.me/group أو t.me/+invite أو @username) أو أسماء المجموعات (كل مجموعة في سطر)..."
+                className="w-full p-3 rounded-xl border border-zinc-700/80 bg-zinc-950 text-zinc-100 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all disabled:opacity-50 disabled:bg-zinc-900/40 placeholder:text-zinc-500"
+              />
+            </div>
+          </div>
+
+          {/* Right Column: Settings, Protection, Actions & Logs */}
+          <div className="lg:col-span-5 space-y-4">
+            
+            {/* نوع الإرسال والجدولة */}
+            <div className="bg-zinc-900/80 rounded-2xl p-4 shadow-xl border border-zinc-800/80 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-300 text-xs font-bold">⏰ نوع الإرسال والنمط</span>
+                <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded font-mono border border-amber-500/20">
+                  {sendType === 'scheduled' ? 'مجدول تلقائياً' : 'إرسال فوري / يدوي'}
+                </span>
+              </div>
+
+              <select
+                id="sendType"
+                value={sendType}
+                onChange={(e) => toggleSchedule(e.target.value as any)}
+                className="w-full p-2.5 rounded-xl border border-zinc-700/80 bg-zinc-950 text-zinc-100 text-xs outline-none focus:border-amber-500"
+              >
+                <option value="manual">يدوي (عند الطلب فقط)</option>
+                <option value="scheduled">مجدول دوري تلقائي</option>
+              </select>
+
+              <div className="flex gap-4 items-center pt-1 border-t border-zinc-800">
+                <span className="text-xs text-zinc-400">أسلوب الإرسال:</span>
+                <label className="flex items-center gap-1.5 text-xs text-zinc-300 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="sendSmart"
+                    value="smart"
+                    checked={sendSmart === 'smart'}
+                    onChange={() => setSendSmart('smart')}
+                    className="accent-amber-500 w-4 h-4 cursor-pointer"
+                  />
+                  <span>ذكي (Smart)</span>
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-zinc-300 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="sendSmart"
+                    value="normal"
+                    checked={sendSmart === 'normal'}
+                    onChange={() => setSendSmart('normal')}
+                    className="accent-amber-500 w-4 h-4 cursor-pointer"
+                  />
+                  <span>عادي (Direct)</span>
+                </label>
+              </div>
+
+              {/* خيارات المجدول */}
+              {sendType === 'scheduled' && (
+                <div className="space-y-2 pt-2 border-t border-zinc-800">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-zinc-400 text-[11px] block mb-1">⏱️ الفترة (دقائق)</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={intervalMinutes}
+                        onChange={(e) => setIntervalMinutes(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-full p-2 rounded-xl border border-zinc-700 bg-zinc-950 text-zinc-100 text-xs outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-zinc-400 text-[11px] block mb-1">⏹️ يتوقف بعد (ساعات)</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.5}
+                        value={scheduleDuration}
+                        onChange={(e) => setScheduleDuration(parseFloat(e.target.value) || 0)}
+                        placeholder="0 = بدون حد"
+                        className="w-full p-2 rounded-xl border border-zinc-700 bg-zinc-950 text-zinc-100 text-xs outline-none focus:border-amber-500"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    className="w-full p-2 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 font-semibold rounded-xl text-xs transition-colors flex items-center justify-center gap-2"
+                    onClick={stopScheduledSend}
+                  >
+                    <i className="fas fa-stop-circle" />
+                    <span>إيقاف الإرسال المجدول</span>
                   </button>
                 </div>
-              ))}
+              )}
             </div>
-          )}
-        </div>
 
-        {/* المجموعات */}
-        <div className="bg-[#f8f9fc] rounded-xl p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] border border-[#e9edf2]">
-          <span className="text-[#5a6b7c] text-[13px] block mb-1 font-medium">👥 المجموعات</span>
-          <textarea
-            id="groupsInput"
-            rows={3}
-            value={groupsInput}
-            onChange={(e) => setGroupsInput(e.target.value)}
-            disabled={allGroupsSelected}
-            placeholder="ضع روابط المجموعات (https://t.me/group أو t.me/+invite أو @username) أو أسماء المجموعات (كل مجموعة في سطر)..."
-            className="w-full p-2.5 rounded-lg border border-[#d9e0e8] bg-white text-[#1e2a3a] text-sm outline-none focus:border-[#2a92e7] focus:ring-2 focus:ring-[#2a92e7]/15 transition-all disabled:opacity-50 disabled:bg-[#f1f3f6]"
-          />
-          <div className="flex items-center gap-2.5 mt-2">
-            <div
-              className={`w-11 h-6 rounded-full cursor-pointer transition-colors relative shrink-0 ${
-                allGroupsSelected ? 'bg-[#2a92e7]' : 'bg-[#cdd5df]'
-              }`}
-              onClick={toggleAllGroups}
-            >
-              <div
-                className={`absolute top-0.5 right-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow ${
-                  allGroupsSelected ? '-translate-x-5' : 'translate-x-0'
-                }`}
+            {/* كلمات المراقبة */}
+            <div className="bg-zinc-900/80 rounded-2xl p-4 shadow-xl border border-zinc-800/80">
+              <span className="text-zinc-300 text-xs font-bold block mb-1.5">🔑 كلمات المراقبة والتنصت</span>
+              <textarea
+                id="watchWords"
+                rows={2}
+                value={watchWords}
+                onChange={(e) => setWatchWords(e.target.value)}
+                placeholder="كلمة في كل سطر (مثال: بحوث، مشروع، مساعدة)..."
+                className="w-full p-2.5 rounded-xl border border-zinc-700/80 bg-zinc-950 text-zinc-100 text-xs outline-none focus:border-amber-500 transition-all resize-y placeholder:text-zinc-500"
               />
             </div>
-            <span className="text-[#2d3e4f] text-[13px] font-medium">
-              {allGroupsSelected ? '✅ تم اختيار كل المجموعات' : 'اختيار كل المجموعات'}
-            </span>
-          </div>
-        </div>
 
-        {/* نوع الإرسال + خيار إضافي (ذكي/عادي) */}
-        <div className="bg-[#f8f9fc] rounded-xl p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] border border-[#e9edf2]">
-          <span className="text-[#5a6b7c] text-[13px] block mb-1 font-medium">⏰ نوع الإرسال</span>
-          <select
-            id="sendType"
-            value={sendType}
-            onChange={(e) => toggleSchedule(e.target.value as any)}
-            className="w-full p-2.5 rounded-lg border border-[#d9e0e8] bg-white text-[#1e2a3a] text-sm outline-none focus:border-[#2a92e7]"
-          >
-            <option value="manual">يدوي</option>
-            <option value="scheduled">مجدول</option>
-          </select>
+            {/* وضع الحماية والمجموعات المحمية */}
+            <div className="bg-zinc-900/80 rounded-2xl p-4 shadow-xl border border-zinc-800/80">
+              <span className="text-zinc-300 text-xs font-bold block mb-2">🛡️ وضع المجموعات المحمية</span>
+              <div className="grid grid-cols-2 gap-2">
+                
+                {/* salam */}
+                <div
+                  className={`p-2.5 rounded-xl cursor-pointer border transition-all ${
+                    selectedOption === 'salam'
+                      ? 'border-amber-500 bg-amber-500/10 text-white'
+                      : 'border-zinc-800 bg-zinc-950/60 text-zinc-400 hover:border-zinc-700'
+                  }`}
+                  onClick={() => selectOption('salam')}
+                >
+                  <div className="text-xs font-bold text-amber-300">🤖 ذكي (salam)</div>
+                  <div className="text-[10px] text-zinc-400">إرسال السلام ثم التعديل</div>
+                </div>
 
-          {/* الخيار الجديد: نوع الإرسال (ذكي/عادي) */}
-          <div className="flex gap-3 items-center mt-2 flex-wrap">
-            <span className="text-[13px] text-[#5a6b7c] font-medium">نوع الإرسال:</span>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-1.5 text-[13px] text-[#2d3e4f] cursor-pointer">
-                <input
-                  type="radio"
-                  name="sendSmart"
-                  value="smart"
-                  checked={sendSmart === 'smart'}
-                  onChange={() => setSendSmart('smart')}
-                  className="accent-[#2a92e7] w-4 h-4 cursor-pointer"
-                />
-                <span>ذكي</span>
-              </label>
-              <label className="flex items-center gap-1.5 text-[13px] text-[#2d3e4f] cursor-pointer">
-                <input
-                  type="radio"
-                  name="sendSmart"
-                  value="normal"
-                  checked={sendSmart === 'normal'}
-                  onChange={() => setSendSmart('normal')}
-                  className="accent-[#2a92e7] w-4 h-4 cursor-pointer"
-                />
-                <span>عادي</span>
-              </label>
-            </div>
-          </div>
-        </div>
+                {/* skip */}
+                <div
+                  className={`p-2.5 rounded-xl cursor-pointer border transition-all ${
+                    selectedOption === 'skip'
+                      ? 'border-amber-500 bg-amber-500/10 text-white'
+                      : 'border-zinc-800 bg-zinc-950/60 text-zinc-400 hover:border-zinc-700'
+                  }`}
+                  onClick={() => selectOption('skip')}
+                >
+                  <div className="text-xs font-bold text-sky-300">⏭️ تخطي</div>
+                  <div className="text-[10px] text-zinc-400">عدم الإرسال للمحمية</div>
+                </div>
 
-        {/* خيارات المجدول */}
-        {sendType === 'scheduled' && (
-          <div className="space-y-2">
-            <div className="bg-[#f8f9fc] rounded-xl p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] border border-[#e9edf2]">
-              <span className="text-[#5a6b7c] text-[13px] block mb-1 font-medium">⏱️ الفترة (دقائق)</span>
-              <input
-                type="number"
-                min={1}
-                value={intervalMinutes}
-                onChange={(e) => setIntervalMinutes(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-full p-2.5 rounded-lg border border-[#d9e0e8] bg-white text-[#1e2a3a] text-sm outline-none focus:border-[#2a92e7]"
-              />
+                {/* smart */}
+                <div
+                  className={`p-2.5 rounded-xl cursor-pointer border transition-all ${
+                    selectedOption === 'smart'
+                      ? 'border-amber-500 bg-amber-500/10 text-white'
+                      : 'border-zinc-800 bg-zinc-950/60 text-zinc-400 hover:border-zinc-700'
+                  }`}
+                  onClick={() => selectOption('smart')}
+                >
+                  <div className="text-xs font-bold text-emerald-300">🧠 تنقية ذكية</div>
+                  <div className="text-[10px] text-zinc-400">تنقية الروابط الحساسة</div>
+                </div>
+
+                {/* always */}
+                <div
+                  className={`p-2.5 rounded-xl cursor-pointer border transition-all ${
+                    selectedOption === 'always'
+                      ? 'border-amber-500 bg-amber-500/10 text-white'
+                      : 'border-zinc-800 bg-zinc-950/60 text-zinc-400 hover:border-zinc-700'
+                  }`}
+                  onClick={() => selectOption('always')}
+                >
+                  <div className="text-xs font-bold text-indigo-300">🛡️ تنقية دائمة</div>
+                  <div className="text-[10px] text-zinc-400">حذف الروابط دائماً</div>
+                </div>
+
+                {/* off */}
+                <div
+                  className={`col-span-2 p-2 rounded-xl cursor-pointer border transition-all flex items-center justify-between ${
+                    selectedOption === 'off'
+                      ? 'border-rose-500 bg-rose-500/10 text-rose-300'
+                      : 'border-zinc-800 bg-zinc-950/60 text-zinc-500 hover:border-zinc-700'
+                  }`}
+                  onClick={() => selectOption('off')}
+                >
+                  <span className="text-xs font-semibold">🚫 معطّل (إرسال مباشر بدون تعديل)</span>
+                  <span className="text-[9px] text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded">خطر حظر</span>
+                </div>
+
+              </div>
             </div>
-            <div className="bg-[#f8f9fc] rounded-xl p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] border border-[#e9edf2]">
-              <span className="text-[#5a6b7c] text-[13px] block mb-1 font-medium">⏹️ يتوقف بعد (ساعات)</span>
-              <input
-                type="number"
-                min={0}
-                step={0.5}
-                value={scheduleDuration}
-                onChange={(e) => setScheduleDuration(parseFloat(e.target.value) || 0)}
-                placeholder="0 = بدون حد"
-                className="w-full p-2.5 rounded-lg border border-[#d9e0e8] bg-white text-[#1e2a3a] text-sm outline-none focus:border-[#2a92e7]"
-              />
-              <div className="text-[11px] text-[#6c7a8a] mt-1">0 = يعمل حتى إيقاف يدوي</div>
-            </div>
-            <div className="bg-[#fff5f5] rounded-xl p-3.5 border border-[#dc3545]">
+
+            {/* أزرار الإجراءات الرئيسية */}
+            <div className="grid grid-cols-2 gap-2">
               <button
-                className="w-full p-2.5 bg-[#dc3545] text-white font-semibold rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
-                onClick={stopScheduledSend}
+                className="w-full py-3 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-[0.98] text-zinc-950 font-black rounded-xl text-xs sm:text-sm transition-all disabled:opacity-60 flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20"
+                onClick={sendNow}
+                disabled={isSending}
               >
-                <i className="fas fa-stop-circle" />
-                <span>إيقاف الإرسال المجدول</span>
+                <i className={`fas ${isSending ? 'fa-spinner fa-spin' : 'fa-paper-plane'}`} />
+                <span>{isSending ? 'جاري الإرسال...' : 'إرسال فوري الآن 🚀'}</span>
+              </button>
+
+              <button
+                className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-bold rounded-xl text-xs sm:text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20"
+                onClick={saveSettings}
+              >
+                <i className="fas fa-save" />
+                <span>حفظ الإعدادات 💾</span>
               </button>
             </div>
-          </div>
-        )}
 
-        {/* كلمات المراقبة */}
-        <div className="bg-[#f8f9fc] rounded-xl p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] border border-[#e9edf2]">
-          <span className="text-[#5a6b7c] text-[13px] block mb-1 font-medium">🔑 كلمات المراقبة</span>
-          <textarea
-            id="watchWords"
-            rows={2}
-            value={watchWords}
-            onChange={(e) => setWatchWords(e.target.value)}
-            placeholder="كلمة في كل سطر..."
-            className="w-full p-2.5 rounded-lg border border-[#d9e0e8] bg-white text-[#1e2a3a] text-sm outline-none focus:border-[#2a92e7] transition-all resize-y"
-          />
-        </div>
-
-        {/* وضع الحماية */}
-        <div className="bg-[#f8f9fc] rounded-xl p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] border border-[#e9edf2]">
-          <span className="text-[#5a6b7c] text-[13px] block mb-1.5 font-medium">🛡️ وضع المجموعات المحمية</span>
-          <div className="grid grid-cols-2 gap-1.5">
-            
-            {/* salam */}
-            <div
-              className={`flex items-center gap-2 p-2 bg-white rounded-lg cursor-pointer border-2 transition-all ${
-                selectedOption === 'salam'
-                  ? 'border-[#2a92e7] bg-[#e9f2fb]'
-                  : 'border-[#d9e0e8]'
-              }`}
-              onClick={() => selectOption('salam')}
-            >
+            {/* سجل العمليات الفوري المدمج */}
+            <div className="bg-zinc-900/80 rounded-2xl p-4 shadow-xl border border-zinc-800/80">
+              <span className="text-zinc-300 text-xs font-bold block mb-2">📋 سجل العمليات المباشر</span>
               <div
-                className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                  selectedOption === 'salam' ? 'border-[#2a92e7]' : 'border-[#adb5bd]'
-                }`}
+                ref={logBoxRef}
+                className="bg-zinc-950 rounded-xl p-3 min-h-[100px] max-h-[140px] overflow-y-auto text-xs text-zinc-300 space-y-1 font-mono border border-zinc-800 scrollbar-thin"
               >
-                {selectedOption === 'salam' && <div className="w-2 h-2 rounded-full bg-[#2a92e7]" />}
-              </div>
-              <div>
-                <div className="text-xs text-[#1e2a3a] font-semibold">🤖 ذكي (salam)</div>
-                <div className="text-[10px] text-[#6c7a8a]">أرسل السلام ثم عدّل</div>
-              </div>
-            </div>
-
-            {/* skip */}
-            <div
-              className={`flex items-center gap-2 p-2 bg-white rounded-lg cursor-pointer border-2 transition-all ${
-                selectedOption === 'skip'
-                  ? 'border-[#2a92e7] bg-[#e9f2fb]'
-                  : 'border-[#d9e0e8]'
-              }`}
-              onClick={() => selectOption('skip')}
-            >
-              <div
-                className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                  selectedOption === 'skip' ? 'border-[#2a92e7]' : 'border-[#adb5bd]'
-                }`}
-              >
-                {selectedOption === 'skip' && <div className="w-2 h-2 rounded-full bg-[#2a92e7]" />}
-              </div>
-              <div>
-                <div className="text-xs text-[#1e2a3a] font-semibold">⏭️ تخطي</div>
-                <div className="text-[10px] text-[#6c7a8a]">لا ترسل للمحمية</div>
-              </div>
-            </div>
-
-            {/* smart */}
-            <div
-              className={`flex items-center gap-2 p-2 bg-white rounded-lg cursor-pointer border-2 transition-all ${
-                selectedOption === 'smart'
-                  ? 'border-[#2a92e7] bg-[#e9f2fb]'
-                  : 'border-[#d9e0e8]'
-              }`}
-              onClick={() => selectOption('smart')}
-            >
-              <div
-                className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                  selectedOption === 'smart' ? 'border-[#2a92e7]' : 'border-[#adb5bd]'
-                }`}
-              >
-                {selectedOption === 'smart' && <div className="w-2 h-2 rounded-full bg-[#2a92e7]" />}
-              </div>
-              <div>
-                <div className="text-xs text-[#1e2a3a] font-semibold">🧠 ذكية</div>
-                <div className="text-[10px] text-[#6c7a8a]">تنقية الرسالة</div>
-              </div>
-            </div>
-
-            {/* always */}
-            <div
-              className={`flex items-center gap-2 p-2 bg-white rounded-lg cursor-pointer border-2 transition-all ${
-                selectedOption === 'always'
-                  ? 'border-[#2a92e7] bg-[#e9f2fb]'
-                  : 'border-[#d9e0e8]'
-              }`}
-              onClick={() => selectOption('always')}
-            >
-              <div
-                className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                  selectedOption === 'always' ? 'border-[#2a92e7]' : 'border-[#adb5bd]'
-                }`}
-              >
-                {selectedOption === 'always' && <div className="w-2 h-2 rounded-full bg-[#2a92e7]" />}
-              </div>
-              <div>
-                <div className="text-xs text-[#1e2a3a] font-semibold">🛡️ تنقية</div>
-                <div className="text-[10px] text-[#6c7a8a]">حذف الروابط دائماً</div>
-              </div>
-            </div>
-
-            {/* off */}
-            <div
-              className={`col-span-2 flex items-center gap-2 p-2 bg-white rounded-lg cursor-pointer border-2 transition-all ${
-                selectedOption === 'off'
-                  ? 'border-[#dc3545] bg-[#fff5f5]'
-                  : 'border-[#d9e0e8]'
-              }`}
-              onClick={() => selectOption('off')}
-            >
-              <div
-                className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                  selectedOption === 'off' ? 'border-[#dc3545]' : 'border-[#adb5bd]'
-                }`}
-              >
-                {selectedOption === 'off' && <div className="w-2 h-2 rounded-full bg-[#dc3545]" />}
-              </div>
-              <div>
-                <div className="text-xs text-[#dc3545] font-semibold">🚫 معطّل</div>
-                <div className="text-[10px] text-[#6c7a8a]">أرسل كما هي (خطر حظر)</div>
+                {logs.map((item) => (
+                  <div key={item.id} className="py-0.5 border-b border-zinc-800/50 text-[11px] flex items-start gap-1.5">
+                    <span className="text-zinc-500 shrink-0">[{item.time}]</span>
+                    <span className="text-zinc-200">{item.message}</span>
+                  </div>
+                ))}
               </div>
             </div>
 
           </div>
-        </div>
 
-        {/* أزرار التحكم */}
-        <div className="grid grid-cols-2 gap-2 mt-1">
-          <button
-            className="w-full py-2.5 px-4 bg-[#2a92e7] hover:bg-blue-600 active:scale-[0.98] text-white font-semibold rounded-xl text-sm transition-all disabled:opacity-60 flex items-center justify-center gap-2 shadow-sm"
-            onClick={sendNow}
-            disabled={isSending}
-          >
-            <i className={`fas ${isSending ? 'fa-spinner fa-spin' : 'fa-paper-plane'}`} />
-            <span>{isSending ? 'جاري...' : 'إرسال الآن'}</span>
-          </button>
-
-          <button
-            className="w-full py-2.5 px-4 bg-[#28a745] hover:bg-green-600 active:scale-[0.98] text-white font-semibold rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-sm"
-            onClick={saveSettings}
-          >
-            <i className="fas fa-save" />
-            <span>حفظ</span>
-          </button>
-
-          {!isMonitoring ? (
-            <button
-              className="w-full py-2.5 px-4 bg-[#ffc107] hover:bg-amber-500 active:scale-[0.98] text-[#1e2a3a] font-semibold rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-sm col-span-2"
-              onClick={startMonitoring}
-            >
-              <i className="fas fa-play" />
-              <span>بدء المراقبة</span>
-            </button>
-          ) : (
-            <button
-              className="w-full py-2.5 px-4 bg-[#dc3545] hover:bg-red-700 active:scale-[0.98] text-white font-semibold rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-sm col-span-2"
-              onClick={stopMonitoring}
-            >
-              <i className="fas fa-stop" />
-              <span>إيقاف</span>
-            </button>
-          )}
-        </div>
-
-        {/* سجل العمليات */}
-        <div className="bg-[#f8f9fc] rounded-xl p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] border border-[#e9edf2] mt-1">
-          <span className="text-[#5a6b7c] text-[13px] block mb-1 font-medium">📋 سجل العمليات</span>
-          <div
-            ref={logBoxRef}
-            className="bg-[#f1f3f6] rounded-lg p-2.5 min-h-[100px] max-h-[150px] overflow-y-auto text-[13px] text-[#2d3e4f] space-y-1 font-mono"
-          >
-            {logs.map((item) => (
-              <div key={item.id} className="py-0.5 border-b border-black/[0.03] text-xs">
-                <span className="text-[#6c7a8a] ml-1">[{item.time}]</span>
-                <span>{item.message}</span>
-              </div>
-            ))}
-          </div>
         </div>
 
       </div>
