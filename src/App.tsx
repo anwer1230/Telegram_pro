@@ -283,14 +283,42 @@ export function renderFormattedMessageText(text: string, onOpenTelegramLink?: (u
     const isQuote = line.startsWith('>') || line.startsWith('»');
     const lineContent = isQuote ? line.replace(/^[>»]\s?/, '') : line;
 
-    // Parse inline tokens: spoilers ||...||, bold **...**, italic *...*, code `...`, strike ~~...~~, links, mentions @..., hashtags #...
+    // Parse inline tokens: markdown links [title](url), spoilers ||...||, bold **...**, italic *...*, code `...`, strike ~~...~~, links, mentions @..., hashtags #...
     const parseInlineTokens = (raw: string, keyPrefix: string): React.ReactNode[] => {
-      const tokenRegex = /(\|\|.+?\|\||`[^`\n]+`|\*\*.+?\*\*|__(.+?)__|~~.+?~~|\*.+?\*|https?:\/\/[^\s<]+|www\.[^\s<]+|t\.me\/[^\s<]+|tg:\/\/[^\s<]+|@[a-zA-Z0-9_]{4,32}|#[a-zA-Z0-9_\u0600-\u06FF]+)/g;
+      const tokenRegex = /(\[[^\]\n]+\]\([^)\n]+\)|\|\|.+?\|\||`[^`\n]+`|\*\*.+?\*\*|__(.+?)__|~~.+?~~|\*.+?\*|https?:\/\/[^\s<]+|www\.[^\s<]+|t\.me\/[^\s<]+|tg:\/\/[^\s<]+|@[a-zA-Z0-9_]{4,32}|#[a-zA-Z0-9_\u0600-\u06FF]+)/g;
       const tokens = raw.split(tokenRegex);
 
       return tokens.map((part, pIdx) => {
         if (!part) return null;
         const subKey = `${keyPrefix}-${pIdx}`;
+
+        // Markdown Link: [label](url)
+        const mdLinkMatch = part.match(/^\[([^\]\n]+)\]\(([^)\n]+)\)$/);
+        if (mdLinkMatch) {
+          const label = mdLinkMatch[1];
+          let url = mdLinkMatch[2].trim();
+          const isTg = url.match(/^(https?:\/\/)?(www\.)?(t\.me|telegram\.me)\//i) || url.startsWith('tg://');
+          return (
+            <span
+              key={subKey}
+              className="msg-link cursor-pointer hover:underline text-sky-400 font-semibold inline-flex items-center gap-0.5"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (onOpenTelegramLink) {
+                  onOpenTelegramLink(url);
+                } else if (isTg) {
+                  window.open(url, '_blank', 'noopener,noreferrer');
+                } else {
+                  window.open(url, '_blank', 'noopener,noreferrer');
+                }
+              }}
+              title={url}
+            >
+              {label}
+            </span>
+          );
+        }
 
         // Spoiler: ||text||
         if (part.startsWith('||') && part.endsWith('||') && part.length > 4) {
@@ -822,30 +850,103 @@ export default function App() {
     setDrawerOpen(true);
   };
 
-  const handleOpenTelegramLink = (rawTarget: string) => {
+  const parseTelegramUrl = (rawTarget: string) => {
+    const target = (rawTarget || '').trim();
+
+    // 1. Private supergroup post: https://t.me/c/123456789/456 or tg://privatepost?channel=123456789&post=456
+    const privatePostMatch = target.match(/(?:t\.me\/c\/|tg:\/\/privatepost\?channel=)(\d+)(?:\/|&post=)?(\d+)?/i);
+    if (privatePostMatch) {
+      return {
+        isPrivateChannel: true,
+        channelId: privatePostMatch[1],
+        msgId: privatePostMatch[2],
+        isInvite: false,
+        rawUrl: target,
+      };
+    }
+
+    // 2. Private invite: https://t.me/+Hash or https://t.me/joinchat/Hash or tg://join?invite=Hash
+    const inviteMatch = target.match(/(?:t\.me\/\+|t\.me\/joinchat\/|tg:\/\/join\?invite=)([a-zA-Z0-9_-]+)/i);
+    if (inviteMatch || target.includes('+') || target.includes('joinchat') || target.includes('tg://join')) {
+      return {
+        isPrivateChannel: false,
+        isInvite: true,
+        inviteHash: inviteMatch ? inviteMatch[1] : undefined,
+        rawUrl: target,
+      };
+    }
+
+    // 3. tg://resolve?domain=handle&post=123
+    const tgResolveMatch = target.match(/tg:\/\/resolve\?domain=([a-zA-Z0-9_]+)(?:&post=(\d+))?/i);
+    if (tgResolveMatch) {
+      return {
+        isPrivateChannel: false,
+        username: tgResolveMatch[1],
+        msgId: tgResolveMatch[2],
+        isInvite: false,
+        rawUrl: target,
+      };
+    }
+
+    // 4. Public group/channel or post: https://t.me/handle/123 or https://t.me/handle
+    const publicMatch = target.match(/^(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me)\/([a-zA-Z0-9_]+)(?:\/(\d+))?/i);
+    if (publicMatch) {
+      const handle = publicMatch[1];
+      const msgId = publicMatch[2];
+      if (handle !== 'joinchat' && handle !== 'c') {
+        return {
+          isPrivateChannel: false,
+          username: handle,
+          msgId,
+          isInvite: false,
+          rawUrl: target,
+        };
+      }
+    }
+
+    // 5. Clean handle (@handle or numeric ID)
+    const clean = target.replace(/^@/, '').trim();
+    const isNumericOnly = /^\d+$/.test(clean);
+    if (isNumericOnly) {
+      return {
+        isPrivateChannel: true,
+        channelId: clean,
+        isInvite: false,
+        rawUrl: target,
+      };
+    }
+
+    return {
+      isPrivateChannel: false,
+      username: clean,
+      isInvite: false,
+      rawUrl: target,
+    };
+  };
+
+  const handleOpenTelegramLink = async (rawTarget: string) => {
     if (!rawTarget) return;
-    const target = rawTarget.trim();
+    const parsed = parseTelegramUrl(rawTarget);
 
-    // 1. Check if target corresponds to a public username or chat title in existing chats
-    const cleanHandle = target
-      .replace(/^(https?:\/\/)?(www\.)?(t\.me|telegram\.me)\//i, '')
-      .replace(/^tg:\/\/resolve\?domain=/i, '')
-      .replace(/^@/, '')
-      .toLowerCase();
+    // If invite link, open Join modal
+    if (parsed.isInvite) {
+      pushNavState('modal', 'telegram_link');
+      setTelegramLinkModalUrl(parsed.rawUrl);
+      return;
+    }
 
-    const isInvite = target.includes('+') || target.includes('joinchat') || target.includes('tg://join');
-
-    if (!isInvite && cleanHandle) {
+    // 1. Private group/channel match
+    if (parsed.isPrivateChannel && parsed.channelId) {
+      const rawCid = parsed.channelId;
       const foundChat = chats.find(
         (c) =>
-          (c.username && c.username.replace('@', '').toLowerCase() === cleanHandle) ||
-          (c.title && c.title.toLowerCase() === cleanHandle) ||
-          (c.name && c.name.toLowerCase() === cleanHandle) ||
-          String(c.id) === cleanHandle
+          String(c.id) === rawCid ||
+          String(c.id) === `-100${rawCid}` ||
+          String(c.id).replace('-100', '').replace('-', '') === rawCid
       );
 
       if (foundChat) {
-        selectChat(foundChat.id);
+        selectChat(foundChat.id, parsed.msgId);
         showToast(
           lang === 'ar'
             ? `تم فتح ${getChatDisplayName(foundChat, lang)}`
@@ -853,11 +954,65 @@ export default function App() {
         );
         return;
       }
+
+      // Try fetching chat details from server
+      try {
+        const res = await fetch(`/api/chats/-100${rawCid}`);
+        const data = await res.json();
+        if (data.success && data.chat) {
+          setChats((prev) => [data.chat, ...prev.filter((c) => String(c.id) !== String(data.chat.id))]);
+          selectChat(data.chat.id, parsed.msgId);
+          showToast(
+            lang === 'ar'
+              ? `تم فتح ${getChatDisplayName(data.chat, lang)}`
+              : `Opened ${getChatDisplayName(data.chat, lang)}`
+          );
+          return;
+        }
+      } catch (_) {}
     }
 
-    // 2. Open official in-app Telegram Link / Join Modal
+    // 2. Public group/channel by username or title match
+    if (parsed.username) {
+      const targetUser = parsed.username.toLowerCase();
+      const foundChat = chats.find(
+        (c) =>
+          (c.username && c.username.replace('@', '').toLowerCase() === targetUser) ||
+          (c.title && c.title.toLowerCase() === targetUser) ||
+          (c.name && c.name.toLowerCase() === targetUser) ||
+          String(c.id) === targetUser
+      );
+
+      if (foundChat) {
+        selectChat(foundChat.id, parsed.msgId);
+        showToast(
+          lang === 'ar'
+            ? `تم فتح ${getChatDisplayName(foundChat, lang)}`
+            : `Opened ${getChatDisplayName(foundChat, lang)}`
+        );
+        return;
+      }
+
+      // Try checking if user is already a member or fetch info
+      try {
+        const res = await fetch(`/api/chats/${parsed.username}`);
+        const data = await res.json();
+        if (data.success && data.chat) {
+          setChats((prev) => [data.chat, ...prev.filter((c) => String(c.id) !== String(data.chat.id))]);
+          selectChat(data.chat.id, parsed.msgId);
+          showToast(
+            lang === 'ar'
+              ? `تم فتح ${getChatDisplayName(data.chat, lang)}`
+              : `Opened ${getChatDisplayName(data.chat, lang)}`
+          );
+          return;
+        }
+      } catch (_) {}
+    }
+
+    // 3. Fallback: If not found in local chats and not private, open official in-app Telegram Link modal
     pushNavState('modal', 'telegram_link');
-    setTelegramLinkModalUrl(target);
+    setTelegramLinkModalUrl(parsed.rawUrl);
   };
 
   useEffect(() => {
@@ -2114,7 +2269,8 @@ export default function App() {
           }
         } else if (type === 'watchword_alert' || (type === 'new_alert' && data.type === 'watchword')) {
           playTelegramIncomingSound();
-          const targetCid = data.chatId || data.alert_data?.chat_id || 1001;
+          const targetCid = data.alert_data?.chat_id || (data.chatId && data.chatId !== 1001 ? data.chatId : null) || data.chat_id || 1001;
+          const targetMsgId = data.alert_data?.msg_id || data.msg_id || data.msgId;
           const word = data.word || data.alert_data?.keyword || 'مراقبة';
           const chatTitle = data.chatTitle || data.alert_data?.group_title || 'مجموعة تليجرام';
           const fullText = data.text || data.alert_data?.full_text || '';
@@ -2126,8 +2282,10 @@ export default function App() {
           // Update active group system activity
           setChats((prev) => {
             const nowSec = Math.floor(Date.now() / 1000);
+            let found = false;
             const updated = prev.map((c) => {
               if (String(c.id) === String(targetCid) || (c.type === 'group' && c.title === chatTitle)) {
+                found = true;
                 return {
                   ...c,
                   last_system_activity: nowSec,
@@ -2136,6 +2294,26 @@ export default function App() {
               }
               return c;
             });
+
+            // If chat wasn't in state, add it so user can click and view it directly
+            if (!found && targetCid) {
+              updated.unshift({
+                id: targetCid,
+                name: chatTitle,
+                title: chatTitle,
+                type: 'group',
+                lastMsg: fullText.substring(0, 60),
+                lastMsgDate: nowSec,
+                unread: 1,
+                pinned: false,
+                muted: false,
+                archived: false,
+                photo: null,
+                last_system_activity: nowSec,
+                has_system_activity: true,
+              } as any);
+            }
+
             const sorted = sortChatsWithLastActivePriority(updated);
             saveCachedChats(sorted);
             return sorted;
@@ -2144,10 +2322,11 @@ export default function App() {
           setInAppNotif({
             id: `ww_${Date.now()}`,
             chat_id: targetCid,
+            msg_id: targetMsgId,
             title: `🚨 رادار المراقبة: "${word}"`,
-            sender_name: 'الرسائل المحفوظة',
-            text: `المصدر: ${chatTitle} | ${sender}: "${fullText.substring(0, 75)}"`,
-            chat_type: 'saved',
+            sender_name: chatTitle,
+            text: `في ${chatTitle} | ${sender}: "${fullText.substring(0, 80)}"`,
+            chat_type: 'group',
             date: Math.floor(Date.now() / 1000),
           });
 
@@ -2155,14 +2334,13 @@ export default function App() {
             body: `في ${chatTitle} | ${sender}: ${fullText.substring(0, 90)}`,
             chat_id: targetCid,
             icon: 'https://telegram.org/img/t_logo.png',
-            tag: data.tag || `ww_${data.alert_data?.chat_id || 'g'}_${data.alert_data?.msg_id || Date.now()}`,
+            tag: data.tag || `ww_${targetCid}_${targetMsgId || Date.now()}`,
             vibrate: [200, 100, 200],
             actions: [
-              { action: 'reply', title: 'رد سريع ✍️' },
-              { action: 'open', title: 'فتح الرسالة 🚀' }
+              { action: 'open', title: 'الذهاب للرسالة 🚀' }
             ],
             data: data.alert_data,
-            onClick: () => selectChat(targetCid),
+            onClick: () => selectChat(targetCid, targetMsgId),
           });
         } else if (type === 'bulk_send_report' || (type === 'new_alert' && data.type === 'bulk_send_report')) {
           playTelegramIncomingSound();
@@ -2308,7 +2486,7 @@ export default function App() {
   };
 
   // ── SELECT CHAT ───────────────────────────────────────────────────────────
-  const selectChat = async (id: string | number) => {
+  const selectChat = async (id: string | number, targetMsgId?: string | number) => {
     // If leaving previous active chat with uncompleted draft, persist to IndexedDB
     if (currentChatId && currentChatId !== id && inputText.trim()) {
       const prevCid = currentChatId;
@@ -2336,6 +2514,9 @@ export default function App() {
         ...prev,
         [id]: cachedMsgs,
       }));
+      if (targetMsgId) {
+        setTimeout(() => scrollToMessage(targetMsgId), 50);
+      }
     }
 
     // Mark chat messages as read on server & trigger real-time read receipt
@@ -2398,7 +2579,11 @@ export default function App() {
     }
     setLoadingMessages(false);
 
-    setTimeout(scrollBottom, 100);
+    if (targetMsgId) {
+      scrollToMessage(targetMsgId);
+    } else {
+      setTimeout(scrollBottom, 100);
+    }
   };
 
   const closeChat = () => {
@@ -2688,15 +2873,39 @@ export default function App() {
   };
 
   const scrollToMessage = (msgId: string | number) => {
-    const el = document.getElementById(`msg-${msgId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      el.style.transition = 'background-color 0.4s ease';
-      el.style.backgroundColor = 'rgba(42,171,238,.35)';
-      setTimeout(() => {
-        el.style.backgroundColor = '';
-      }, 1400);
-    }
+    if (!msgId) return;
+    const cleanId = String(msgId).replace(/\D/g, '');
+    const rawStrId = String(msgId);
+
+    const findEl = () => {
+      return (
+        document.getElementById(`msg-${rawStrId}`) ||
+        (cleanId ? document.getElementById(`msg-${cleanId}`) : null) ||
+        (cleanId ? document.getElementById(`msg-m_tg_${cleanId}`) : null) ||
+        (cleanId ? document.getElementById(`msg-m_sim_${cleanId}`) : null) ||
+        document.querySelector(`[data-msg-id="${rawStrId}"]`) ||
+        (cleanId ? document.querySelector(`[data-msg-id="${cleanId}"]`) : null)
+      );
+    };
+
+    const attemptScroll = (retriesLeft: number) => {
+      const el = findEl();
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.style.transition = 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)';
+        el.style.backgroundColor = 'rgba(56, 189, 248, 0.38)';
+        el.style.boxShadow = '0 0 20px rgba(56, 189, 248, 0.7)';
+        el.style.borderRadius = '10px';
+        setTimeout(() => {
+          el.style.backgroundColor = '';
+          el.style.boxShadow = '';
+        }, 2400);
+      } else if (retriesLeft > 0) {
+        setTimeout(() => attemptScroll(retriesLeft - 1), 150);
+      }
+    };
+
+    attemptScroll(6);
   };
 
   // ── CONTEXT MENU & REACTIONS ──────────────────────────────────────────────
@@ -4480,6 +4689,8 @@ export default function App() {
                             <div
                               key={m.id}
                               id={`msg-${m.id}`}
+                              data-msg-id={String(m.id)}
+                              data-clean-id={String(m.id).replace(/\D/g, '')}
                               className={`sub-msg-item ${idx > 0 ? 'sub-msg-followup' : 'sub-msg-first'}`}
                               onContextMenu={(e) => showMsgCtx(e, m)}
                             >
@@ -5025,8 +5236,8 @@ export default function App() {
       {/* ══ TELEGRAM IN-APP HEADS-UP NOTIFICATION BANNER ══ */}
       <TelegramNotificationBanner
         notification={inAppNotif}
-        onOpenChat={(cid) => {
-          selectChat(cid);
+        onOpenChat={(cid, msgId) => {
+          selectChat(cid, msgId);
           setInAppNotif(null);
         }}
         onDismiss={() => setInAppNotif(null)}

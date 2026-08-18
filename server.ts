@@ -136,27 +136,52 @@ function broadcastSSE(type: string, data: any) {
 // Hook real MTProto new incoming messages to SSE broadcast
 setNewMessageCallback((msgData: any) => {
   const cid = parseInt(String(msgData.chat_id).replace('-100', '').replace('-', ''), 10) || msgData.chat_id;
+  const fullCid = msgData.chat_id;
+
   if (!messagesMapStore[cid]) {
     messagesMapStore[cid] = [];
   }
-  messagesMapStore[cid].push(msgData.message);
+  if (!messagesMapStore[fullCid]) {
+    messagesMapStore[fullCid] = messagesMapStore[cid];
+  }
+
+  // Deduplicate and append message
+  const exists = messagesMapStore[cid].some((m: any) => String(m.id) === String(msgData.message?.id));
+  if (!exists && msgData.message) {
+    messagesMapStore[cid].push(msgData.message);
+  }
+
+  // Ensure chat is registered in chatsStore
+  let chat = chatsStore.find(c => String(c.id) === String(cid) || String(c.id) === String(fullCid) || c.id === cid);
+  if (!chat) {
+    chat = {
+      id: cid,
+      title: msgData.chat_title || msgData.message?.sender_name || `مجموعة تليجرام #${cid}`,
+      type: 'group',
+      unread_count: 1,
+      last_message: msgData.message,
+    } as Chat;
+    chatsStore.unshift(chat);
+    broadcastSSE('updateChats', chatsStore);
+  } else {
+    chat.last_message = msgData.message;
+    chat.unread_count = (chat.unread_count || 0) + 1;
+    broadcastSSE('updateChat', chat);
+  }
+
   broadcastSSE('new_message', msgData);
 
   // Send push notification event
   broadcastSSE('notification', {
     type: 'message',
     chat_id: cid,
-    title: msgData.message?.sender_name || 'رسالة جديدة',
+    msg_id: msgData.message?.id,
+    title: msgData.message?.sender_name || chat.title || 'رسالة جديدة',
     body: msgData.message?.text || (msgData.message?.media ? '[وسائط]' : 'رسالة جديدة في تليجرام'),
   });
 
   // Run live keyword radar and automated replies on real MTProto incoming message
   try {
-    const chat = chatsStore.find(c => String(c.id) === String(cid) || c.id === cid) || {
-      id: cid,
-      title: msgData.chat_title || msgData.message?.sender_name || 'مجموعة تليجرام',
-      type: 'group',
-    } as Chat;
     if (msgData.message) {
       checkWatchwordsAndAutoReply(chat, msgData.message);
     }
@@ -1074,6 +1099,64 @@ app.get('/api/chats', async (req: Request, res: Response) => {
     };
   });
   res.json({ success: true, chats: mainChats });
+});
+
+// Single Chat Details Route
+app.get('/api/chats/:cid', async (req: Request, res: Response) => {
+  const cid = req.params.cid;
+  const numCid = parseInt(cid, 10) || cid;
+  const rawId = String(cid).replace('-100', '').replace('-', '');
+
+  let chat = chatsStore.find(
+    (c) =>
+      String(c.id) === String(cid) ||
+      String(c.id) === String(numCid) ||
+      String(c.id).replace('-100', '').replace('-', '') === rawId ||
+      (c.username && c.username.replace('@', '').toLowerCase() === String(cid).toLowerCase())
+  );
+
+  if (chat) {
+    return res.json({
+      success: true,
+      chat: {
+        ...chat,
+        name: chat.title,
+        is_channel: chat.type === 'channel',
+        is_group: chat.type === 'group' || chat.type === 'supergroup',
+        photo: chat.avatar || (chat as any).photo,
+      },
+    });
+  }
+
+  // If not found in memory and MTProto client is active, attempt to get chat info
+  if (isTelegramClientActive()) {
+    try {
+      const dialogs = await getActiveTelegramDialogs();
+      const foundInDialogs = dialogs.find(
+        (d: any) =>
+          String(d.id) === String(cid) ||
+          String(d.id) === String(numCid) ||
+          String(d.id).replace('-100', '').replace('-', '') === rawId ||
+          (d.username && d.username.replace('@', '').toLowerCase() === String(cid).toLowerCase())
+      );
+      if (foundInDialogs) {
+        return res.json({
+          success: true,
+          chat: {
+            ...foundInDialogs,
+            name: foundInDialogs.title,
+            is_channel: foundInDialogs.type === 'channel',
+            is_group: foundInDialogs.type === 'group' || foundInDialogs.type === 'supergroup',
+            photo: foundInDialogs.avatar || (foundInDialogs as any).photo,
+          },
+        });
+      }
+    } catch (e) {
+      console.warn('Error resolving single chat from MTProto:', e);
+    }
+  }
+
+  res.status(404).json({ success: false, error: 'المحادثة غير موجودة' });
 });
 
 app.get('/api/chats/:cid/messages', async (req: Request, res: Response) => {
@@ -2331,7 +2414,10 @@ function sendKeywordAlertNotification(chat: Chat, msg: Message, matchedWord: str
     chatTitle: chat.title,
     senderName: msg.sender_name,
     text,
-    chatId: 1001,
+    chatId: chat.id,
+    chat_id: chat.id,
+    msgId: msg.id,
+    msg_id: msg.id,
     alert_data: alertData,
   });
 }
@@ -2864,8 +2950,8 @@ setInterval(async () => {
     }
   }
 
-  // 4. Live Simulated Incoming Group Activity (Triggers Watchwords & Notifications)
-  if (automationState.send_monitor.enabled) {
+  // 4. Live Simulated Incoming Group Activity (Triggers Watchwords & Notifications in Demo/Offline Mode)
+  if (automationState.send_monitor.enabled && !isTelegramClientActive()) {
     const watchwords = (automationState.send_monitor.watchWords || []).filter((w: string) => w.trim().length > 0);
     if (watchwords.length > 0 && Math.random() < 0.35) {
       const activeGroups = chatsStore.filter(c => c.type === 'group' || c.type === 'supergroup');

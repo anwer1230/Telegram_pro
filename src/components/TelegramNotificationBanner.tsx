@@ -5,6 +5,7 @@ import { ChatAvatar } from './ChatAvatar';
 export interface TelegramNotificationItem {
   id: string;
   chat_id: string | number;
+  msg_id?: string | number;
   title: string;
   sender_name?: string;
   sender_avatar?: string;
@@ -19,7 +20,7 @@ export interface TelegramNotificationItem {
 
 interface TelegramNotificationBannerProps {
   notification: TelegramNotificationItem | null;
-  onOpenChat: (chatId: string | number) => void;
+  onOpenChat: (chatId: string | number, msgId?: string | number) => void;
   onMuteChat?: (chatId: string | number) => void;
   onDismiss: () => void;
   lang?: 'ar' | 'en';
@@ -72,7 +73,14 @@ export const TelegramNotificationBanner: React.FC<TelegramNotificationBannerProp
           }}
         />
 
-        <div className="flex items-start gap-3">
+        <div
+          className="flex items-start gap-3 cursor-pointer"
+          onClick={() => {
+            onOpenChat(notification.chat_id, notification.msg_id);
+            setVisible(false);
+            setTimeout(onDismiss, 300);
+          }}
+        >
           {/* Real Avatar */}
           <ChatAvatar
             id={notification.chat_id}
@@ -108,11 +116,12 @@ export const TelegramNotificationBanner: React.FC<TelegramNotificationBannerProp
 
           {/* Dismiss button */}
           <button
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               setVisible(false);
               setTimeout(onDismiss, 300);
             }}
-            className="text-slate-400 hover:text-white p-1 rounded-full hover:bg-slate-800 transition"
+            className="text-slate-400 hover:text-white p-1 rounded-full hover:bg-slate-800 transition shrink-0"
             title={lang === 'ar' ? 'إغلاق' : 'Dismiss'}
           >
             <X className="w-4 h-4" />
@@ -137,15 +146,16 @@ export const TelegramNotificationBanner: React.FC<TelegramNotificationBannerProp
           )}
 
           <button
-            onClick={() => {
-              onOpenChat(notification.chat_id);
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenChat(notification.chat_id, notification.msg_id);
               setVisible(false);
               setTimeout(onDismiss, 300);
             }}
             className="px-3.5 py-1 text-[11px] font-medium rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 transition flex items-center gap-1 shadow-sm"
           >
             <ExternalLink className="w-3 h-3" />
-            <span>{lang === 'ar' ? 'فتح المحادثة' : 'Open Chat'}</span>
+            <span>{lang === 'ar' ? 'الذهاب للرسالة' : 'Jump to Message'}</span>
           </button>
         </div>
       </div>
