@@ -29,9 +29,10 @@ import {
   checkTelegramInvite,
   joinTelegramChat,
 } from './src/lib/telegramService';
+import { APP_CONFIG } from './src/config/telegramConfig';
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = APP_CONFIG.PORT;
 
 app.use(express.json());
 
@@ -205,8 +206,8 @@ const ABU_MLK_CONFIG = {
   app_title: 'مركز سرعة إنجاز 📚 للخدمات الطلابية والأكاديمية',
   app_version: '2.0.0',
   github_repo: process.env.GITHUB_REPO || 'anwer1230/Abu_Mlk',
-  tdlib_api_id: process.env.TDLIB_API_ID || '22043994',
-  tdlib_api_hash: process.env.TDLIB_API_HASH || '56f64582b363d367280db96586b97801',
+  tdlib_api_id: String(APP_CONFIG.TDLIB_API_ID),
+  tdlib_api_hash: APP_CONFIG.TDLIB_API_HASH,
   session_secret: process.env.SESSION_SECRET || 'merged_secret_abu_mlk_2026',
 };
 

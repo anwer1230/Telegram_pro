@@ -2,9 +2,10 @@ import { TelegramClient, Api } from 'telegram';
 import { StringSession } from 'telegram/sessions';
 import { computeCheck } from 'telegram/Password';
 import { NewMessage } from 'telegram/events';
+import { APP_CONFIG } from '../config/telegramConfig';
 
-const API_ID = 22043994;
-const API_HASH = '56f64582b363d367280db96586b97801';
+const API_ID = APP_CONFIG.TDLIB_API_ID;
+const API_HASH = APP_CONFIG.TDLIB_API_HASH;
 
 interface PendingAuth {
   client: TelegramClient;

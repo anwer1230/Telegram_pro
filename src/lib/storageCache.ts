@@ -11,6 +11,7 @@ const CACHE_KEYS = {
   PINNED_MSGS: 'tg_cache_pinned_msgs',
   LAST_SYNC: 'tg_cache_last_sync',
   USER_PROFILE: 'tg_cache_user_profile',
+  DRAFTS: 'tg_cache_drafts',
 };
 
 // Maximum messages to preserve per chat in localStorage to respect quota limits
@@ -249,6 +250,36 @@ export function getStorageCacheSummary(): {
   };
 }
 
+// ── DRAFTS CACHE (LocalStorage fast hydration) ─────────────────────────────
+
+export function saveCachedDraft(chatId: string | number, text: string): void {
+  const cKey = String(chatId);
+  const drafts = getAllCachedDrafts();
+  if (!text || !text.trim()) {
+    delete drafts[cKey];
+  } else {
+    drafts[cKey] = text;
+  }
+  safeSetJson(CACHE_KEYS.DRAFTS, drafts);
+}
+
+export function getCachedDraft(chatId: string | number): string {
+  const drafts = getAllCachedDrafts();
+  return drafts[String(chatId)] || '';
+}
+
+export function getAllCachedDrafts(): Record<string, string> {
+  return safeGetJson<Record<string, string>>(CACHE_KEYS.DRAFTS, {});
+}
+
+export function deleteCachedDraft(chatId: string | number): void {
+  saveCachedDraft(chatId, '');
+}
+
+export function saveAllCachedDrafts(drafts: Record<string, string>): void {
+  safeSetJson(CACHE_KEYS.DRAFTS, drafts);
+}
+
 /**
  * Clear all localStorage cache data.
  */
@@ -264,6 +295,7 @@ export function clearStorageCache(): void {
     localStorage.removeItem(CACHE_KEYS.PINNED_MSGS);
     localStorage.removeItem(CACHE_KEYS.LAST_SYNC);
     localStorage.removeItem(CACHE_KEYS.USER_PROFILE);
+    localStorage.removeItem(CACHE_KEYS.DRAFTS);
     console.log('[StorageCache] LocalStorage cache cleared successfully');
   } catch (e) {
     console.error('[StorageCache] Error clearing cache:', e);

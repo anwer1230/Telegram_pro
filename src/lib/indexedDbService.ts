@@ -2,7 +2,7 @@
 // Handles persistent storage for offline chats, messages, session keys, and offline message queue.
 
 const DB_NAME = 'TelegramWebAppDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export interface OfflineMessage {
   id: string;
@@ -10,6 +10,12 @@ export interface OfflineMessage {
   text: string;
   timestamp: number;
   status: 'queued' | 'sending' | 'sent' | 'failed';
+}
+
+export interface DraftRecord {
+  chatId: string;
+  text: string;
+  updatedAt: number;
 }
 
 class IndexedDbService {
@@ -43,6 +49,11 @@ class IndexedDbService {
         // Offline Outgoing Message Queue
         if (!db.objectStoreNames.contains('offline_queue')) {
           db.createObjectStore('offline_queue', { keyPath: 'id' });
+        }
+
+        // Persistent Drafts Store (Keyed by chatId for multi-chat text input persistence)
+        if (!db.objectStoreNames.contains('drafts')) {
+          db.createObjectStore('drafts', { keyPath: 'chatId' });
         }
       };
 
@@ -159,6 +170,78 @@ class IndexedDbService {
       const tx = db.transaction('offline_queue', 'readwrite');
       const store = tx.objectStore('offline_queue');
       store.delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  // --- PERSISTENT DRAFTS STORAGE (Cross-Session Text Input Integrity) ---
+  async saveDraft(chatId: string | number, text: string): Promise<void> {
+    const db = await this.openDB();
+    const cKey = String(chatId);
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('drafts', 'readwrite');
+      const store = tx.objectStore('drafts');
+      if (!text || !text.trim()) {
+        store.delete(cKey);
+      } else {
+        store.put({ chatId: cKey, text: text, updatedAt: Date.now() });
+      }
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async getDraft(chatId: string | number): Promise<string> {
+    const db = await this.openDB();
+    const cKey = String(chatId);
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('drafts', 'readonly');
+      const store = tx.objectStore('drafts');
+      const req = store.get(cKey);
+      req.onsuccess = () => resolve(req.result ? req.result.text : '');
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async getAllDrafts(): Promise<Record<string, string>> {
+    const db = await this.openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('drafts', 'readonly');
+      const store = tx.objectStore('drafts');
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const records: DraftRecord[] = req.result || [];
+        const result: Record<string, string> = {};
+        records.forEach((r) => {
+          if (r.chatId && r.text) {
+            result[r.chatId] = r.text;
+          }
+        });
+        resolve(result);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async deleteDraft(chatId: string | number): Promise<void> {
+    const db = await this.openDB();
+    const cKey = String(chatId);
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('drafts', 'readwrite');
+      const store = tx.objectStore('drafts');
+      store.delete(cKey);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async clearAllDrafts(): Promise<void> {
+    const db = await this.openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('drafts', 'readwrite');
+      const store = tx.objectStore('drafts');
+      store.clear();
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });

@@ -48,7 +48,14 @@ import {
   getLastSyncTimestamp,
   clearStorageCache,
   getStorageCacheSummary,
+  saveCachedDraft,
+  getCachedDraft,
+  getAllCachedDrafts,
+  deleteCachedDraft,
+  saveAllCachedDrafts,
 } from './lib/storageCache';
+import { indexedDbService } from './lib/indexedDbService';
+import { mtprotoService } from './lib/mtprotoService';
 import { syncEngine } from './lib/sync';
 import { sortChatsWithLastActivePriority, isGroupChat } from './utils/chatSorting';
 import './system-messages.css';
@@ -480,9 +487,38 @@ export default function App() {
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Pinned Messages & Drafts Stores (Initialized from localStorage cache)
+  // Pinned Messages & Drafts Stores (Dual-layer persistence: localStorage fast cache + IndexedDB durable store)
   const [pinnedMessages, setPinnedMessages] = useState<Record<string, PinnedMsgData | null>>(() => getCachedPinnedMessages());
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [drafts, setDrafts] = useState<Record<string, string>>(() => getAllCachedDrafts());
+
+  // Automatically persist text input to IndexedDB and sync across sessions
+  const handleDraftChange = (newText: string, targetChatId?: string | number | null) => {
+    const activeId = targetChatId !== undefined ? targetChatId : currentChatId;
+    setInputText(newText);
+    if (activeId) {
+      const cidStr = String(activeId);
+      setDrafts((prev) => {
+        const next = { ...prev };
+        if (!newText.trim()) {
+          delete next[cidStr];
+        } else {
+          next[cidStr] = newText;
+        }
+        saveCachedDraft(activeId, newText);
+        return next;
+      });
+
+      // Persist to IndexedDB for data integrity across browser sessions
+      indexedDbService.saveDraft(activeId, newText).catch((err) => {
+        console.warn('[IndexedDB] Draft auto-persist failed:', err);
+      });
+
+      // Update Telegram Cloud MTProto Draft
+      if (typeof activeId === 'number' || !isNaN(Number(activeId))) {
+        mtprotoService.saveCloudDraft(Number(activeId), newText);
+      }
+    }
+  };
 
   // Attachments Previews
   const [pendingAttachments, setPendingAttachments] = useState<AttachmentItem[]>([]);
@@ -2189,15 +2225,38 @@ export default function App() {
     };
   }, [isLoggedIn, currentChatId]);
 
-  // ── LOAD REAL CHATS & DRAFTS ──────────────────────────────────────────────
+  // ── LOAD REAL CHATS & DRAFTS (IndexedDB & Cloud) ─────────────────────────
   const loadDrafts = async () => {
     try {
+      // 1. Restore drafts from IndexedDB durable storage
+      const idbDrafts = await indexedDbService.getAllDrafts();
+      if (idbDrafts && Object.keys(idbDrafts).length > 0) {
+        setDrafts((prev) => {
+          const merged = { ...prev, ...idbDrafts };
+          saveAllCachedDrafts(merged);
+          return merged;
+        });
+      }
+
+      // 2. Synchronize with Telegram Server drafts
       const r = await fetch('/api/drafts');
       const d = await r.json();
       if (d.success && d.drafts) {
-        setDrafts(d.drafts);
+        setDrafts((prev) => {
+          const merged = { ...prev, ...d.drafts };
+          saveAllCachedDrafts(merged);
+          // Persist server drafts into IndexedDB for offline persistence
+          Object.entries(d.drafts).forEach(([cid, txt]) => {
+            if (typeof txt === 'string' && txt.trim()) {
+              indexedDbService.saveDraft(cid, txt).catch(() => {});
+            }
+          });
+          return merged;
+        });
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[Drafts] Error synchronizing drafts:', e);
+    }
   };
 
   const loadChats = async () => {
@@ -2250,8 +2309,13 @@ export default function App() {
 
   // ── SELECT CHAT ───────────────────────────────────────────────────────────
   const selectChat = async (id: string | number) => {
+    // If leaving previous active chat with uncompleted draft, persist to IndexedDB
     if (currentChatId && currentChatId !== id && inputText.trim()) {
-      setDrafts((prev) => ({ ...prev, [String(currentChatId)]: inputText }));
+      const prevCid = currentChatId;
+      const prevText = inputText;
+      setDrafts((prev) => ({ ...prev, [String(prevCid)]: prevText }));
+      saveCachedDraft(prevCid, prevText);
+      indexedDbService.saveDraft(prevCid, prevText).catch(() => {});
     }
 
     pushNavState('chat', id);
@@ -2285,8 +2349,17 @@ export default function App() {
       fetchPeerAvatar(id);
     }
 
-    const existingDraft = drafts[String(id)] || '';
+    // Restore draft: 1st from state/cache, 2nd verified from IndexedDB
+    const existingDraft = drafts[String(id)] || getCachedDraft(id) || '';
     setInputText(existingDraft);
+
+    indexedDbService.getDraft(id).then((savedDraft) => {
+      if (savedDraft && savedDraft !== existingDraft) {
+        setInputText(savedDraft);
+        setDrafts((prev) => ({ ...prev, [String(id)]: savedDraft }));
+        saveCachedDraft(id, savedDraft);
+      }
+    }).catch(() => {});
 
     // Fetch pinned message
     try {
@@ -2329,6 +2402,14 @@ export default function App() {
   };
 
   const closeChat = () => {
+    // If text was typed before closing chat, ensure it's saved in IndexedDB
+    if (currentChatId && inputText.trim()) {
+      const cid = currentChatId;
+      const text = inputText;
+      setDrafts((prev) => ({ ...prev, [String(cid)]: text }));
+      saveCachedDraft(cid, text);
+      indexedDbService.saveDraft(cid, text).catch(() => {});
+    }
     setCurrentChatId(null);
     setSearchInChatOpen(false);
     setReplyMsg(null);
@@ -2379,6 +2460,19 @@ export default function App() {
 
     if (text) {
       setInputText('');
+
+      // Clear draft across all persistence layers (IndexedDB, LocalStorage, state, MTProto)
+      setDrafts((prev) => {
+        const next = { ...prev };
+        delete next[String(cid)];
+        return next;
+      });
+      deleteCachedDraft(cid);
+      indexedDbService.deleteDraft(cid).catch(() => {});
+      if (typeof cid === 'number' || !isNaN(Number(cid))) {
+        mtprotoService.clearCloudDraft(Number(cid));
+      }
+
       const tmpId = `tmp_${Date.now()}`;
       const optimisticMsg: MessageItem = {
         id: tmpId,
@@ -4590,7 +4684,7 @@ export default function App() {
                       placeholder={lang === 'ar' ? 'اكتب رسالة...' : 'Write a message...'}
                       value={inputText}
                       rows={1}
-                      onChange={(e) => setInputText(e.target.value)}
+                      onChange={(e) => handleDraftChange(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
@@ -4670,7 +4764,7 @@ export default function App() {
                     <span
                       key={emoji}
                       className="emoji-item"
-                      onClick={() => setInputText((prev) => prev + emoji)}
+                      onClick={() => handleDraftChange(inputText + emoji)}
                     >
                       {emoji}
                     </span>
