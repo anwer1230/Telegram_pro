@@ -13,6 +13,9 @@ import {
   Pause,
   Share2,
   MoreVertical,
+  Clock,
+  Timer,
+  Flame,
 } from 'lucide-react';
 import { TelegramStory } from '../types';
 
@@ -42,6 +45,7 @@ export const StoryViewerModal: React.FC<StoryViewerModalProps> = ({
   // New Story Creation States
   const [newCaption, setNewCaption] = useState('');
   const [newMediaUrl, setNewMediaUrl] = useState('');
+  const [storyDurationHours, setStoryDurationHours] = useState<number>(24); // 6, 12, 24, 48 hours or test preset
 
   useEffect(() => {
     setCurrentIndex(initialIndex);
@@ -114,14 +118,21 @@ export const StoryViewerModal: React.FC<StoryViewerModalProps> = ({
 
   const handlePublishNewStory = () => {
     if (!newMediaUrl.trim()) return;
+    const now = Date.now();
+    const durationMs = storyDurationHours * 3600 * 1000;
+    const expiresAt = new Date(now + durationMs).toISOString();
+    const createdAt = new Date(now).toISOString();
+
     const created: TelegramStory = {
-      id: `story_${Date.now()}`,
+      id: `story_${now}`,
       user_id: 'me',
       user_name: 'حسابي الشغّال (أنا)',
       user_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
       media_url: newMediaUrl,
       media_type: 'photo',
       caption: newCaption || 'قصة جديدة عبر تليجرام رسمياً 🌟',
+      created_at: createdAt,
+      expires_at: expiresAt,
       date: 'الآن',
       views_count: 1,
       reactions_count: 0,
@@ -175,6 +186,19 @@ export const StoryViewerModal: React.FC<StoryViewerModalProps> = ({
                   <span className="bg-sky-500/30 text-sky-300 text-[9px] px-1.5 py-0.5 rounded-full font-mono">
                     قصة تليجرام
                   </span>
+                  {currentStory?.expires_at && (
+                    <span className="bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[9px] px-1.5 py-0.5 rounded-full font-mono flex items-center gap-0.5">
+                      <Clock className="w-2.5 h-2.5" />
+                      {(() => {
+                        const diffMs = new Date(currentStory.expires_at).getTime() - Date.now();
+                        if (diffMs <= 0) return 'منتهية';
+                        const mins = Math.floor(diffMs / 60000);
+                        if (mins < 60) return `متبقي ${mins} د`;
+                        const hrs = Math.floor(mins / 60);
+                        return `متبقي ${hrs} س`;
+                      })()}
+                    </span>
+                  )}
                 </div>
                 <div className="text-[10px] text-slate-300 font-mono opacity-80">
                   {currentStory?.date}
@@ -336,6 +360,41 @@ export const StoryViewerModal: React.FC<StoryViewerModalProps> = ({
                   placeholder="اكتب تعليقك على القصة هنا..."
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white text-xs focus:outline-none focus:border-sky-400"
                 />
+              </div>
+
+              {/* Story Expiration Duration */}
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1 flex items-center justify-between">
+                  <span>مدة بقاء القصة قبل الحذف (Auto-Expire):</span>
+                  <span className="text-[10px] text-amber-400 font-mono flex items-center gap-1">
+                    <Flame className="w-3 h-3" /> {storyDurationHours} ساعة
+                  </span>
+                </label>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[
+                    { hours: 6, label: '6 ساعات' },
+                    { hours: 12, label: '12 ساعة' },
+                    { hours: 24, label: '24 ساعة' },
+                    { hours: 48, label: '48 ساعة' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.hours}
+                      type="button"
+                      onClick={() => setStoryDurationHours(opt.hours)}
+                      className={`p-1.5 rounded-lg border text-center font-bold text-[11px] transition-colors ${
+                        storyDurationHours === opt.hours
+                          ? 'bg-sky-500/20 border-sky-400 text-sky-300'
+                          : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-1 text-[10px] text-slate-400 flex items-center gap-1">
+                  <Clock className="w-3 h-3 text-sky-400" />
+                  <span>سيتم إرسال إشعار تلقائي لك قبل 30 دقيقة من انتهاء صلاحية القصة.</span>
+                </div>
               </div>
 
               {/* Quick Image Presets */}

@@ -3891,6 +3891,7 @@ let privacySettingsStore = {
   group_invite_privacy: 'contacts',
   active_sessions_count: 3,
   two_factor_auth: true,
+  default_history_ttl: 0,
 };
 
 let blockedUsersStore = [
@@ -3905,6 +3906,24 @@ app.get('/api/privacy/settings', (req: Request, res: Response) => {
 app.post('/api/privacy/settings', (req: Request, res: Response) => {
   privacySettingsStore = { ...privacySettingsStore, ...req.body };
   res.json({ status: 'ok', settings: privacySettingsStore, message: 'تم تحديث إعدادات الخصوصية والأمان بنجاح' });
+});
+
+app.get('/api/settings/default-ttl', (req: Request, res: Response) => {
+  res.json({
+    status: 'ok',
+    period: privacySettingsStore.default_history_ttl || 0,
+    synced_protocol: 'MTProto 2.0 (messages.setDefaultHistoryTTL)',
+  });
+});
+
+app.post('/api/settings/default-ttl', (req: Request, res: Response) => {
+  const period = typeof req.body.period === 'number' ? req.body.period : parseInt(req.body.period || '0', 10);
+  privacySettingsStore.default_history_ttl = isNaN(period) ? 0 : period;
+  res.json({
+    status: 'ok',
+    period: privacySettingsStore.default_history_ttl,
+    message: 'تم تحديث ومزامنة مؤقت الحذف الذاتي للرسائل بنجاح عبر خوادم تليجرام MTProto',
+  });
 });
 
 app.get('/api/blocked/users', (req: Request, res: Response) => {

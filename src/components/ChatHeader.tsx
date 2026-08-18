@@ -20,9 +20,18 @@ import {
   Phone,
   Video,
   Palette,
+  Music,
+  Play,
 } from 'lucide-react';
 import { Chat, Message } from '../types';
 import { ChatAvatar } from './ChatAvatar';
+import {
+  AVAILABLE_NOTIFICATION_TONES,
+  getCustomChatTone,
+  setCustomChatTone,
+  removeCustomChatTone,
+  playToneById,
+} from '../utils/telegramPeerUtils';
 
 interface ChatHeaderProps {
   chat: Chat;
@@ -61,8 +70,14 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [showMuteSubmenu, setShowMuteSubmenu] = useState(false);
+  const [showToneSubmenu, setShowToneSubmenu] = useState(false);
+  const [currentCustomTone, setCurrentCustomTone] = useState<string | null>(null);
   const [currentPinnedIdx, setCurrentPinnedIdx] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setCurrentCustomTone(getCustomChatTone(chat.id));
+  }, [chat.id, showMenu]);
 
   const activePinnedMsg = pinnedMessages[currentPinnedIdx % (pinnedMessages.length || 1)];
 
@@ -294,6 +309,78 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                         </button>
                       </>
                     )}
+                  </div>
+                )}
+              </div>
+
+              {/* Custom Tone Picker */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowToneSubmenu(!showToneSubmenu)}
+                  className="w-full text-right px-3.5 py-2 hover:bg-slate-800 flex items-center justify-between transition-colors text-sky-400"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Music className="w-4 h-4 text-sky-400" />
+                    <span>
+                      {currentCustomTone
+                        ? `نغمة مخصصة: ${AVAILABLE_NOTIFICATION_TONES.find((t) => t.id === currentCustomTone)?.nameAr || currentCustomTone}`
+                        : 'نغمة تنبيه مخصصة...'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    {currentCustomTone ? '🔔' : 'الافتراضية'}
+                  </span>
+                </button>
+
+                {showToneSubmenu && (
+                  <div className="p-2 bg-slate-950 border border-slate-800 rounded-xl my-1 space-y-1 mx-2 max-h-48 overflow-y-auto custom-scrollbar">
+                    <button
+                      onClick={() => {
+                        removeCustomChatTone(chat.id);
+                        setCurrentCustomTone(null);
+                        setShowToneSubmenu(false);
+                      }}
+                      className={`w-full text-right px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors ${
+                        !currentCustomTone ? 'bg-sky-600/30 text-sky-300 font-bold' : 'hover:bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      <span>🔄 استخدام النغمة الافتراضية العامة</span>
+                    </button>
+
+                    {AVAILABLE_NOTIFICATION_TONES.map((tone) => {
+                      const isChosen = currentCustomTone === tone.id;
+                      return (
+                        <div
+                          key={tone.id}
+                          className={`flex items-center justify-between p-1.5 rounded-lg text-xs transition-colors ${
+                            isChosen ? 'bg-sky-500/20 text-sky-300 font-bold border border-sky-500/30' : 'hover:bg-slate-800 text-slate-200'
+                          }`}
+                        >
+                          <button
+                            onClick={() => {
+                              setCustomChatTone(chat.id, tone.id);
+                              setCurrentCustomTone(tone.id);
+                              playToneById(tone.id);
+                              setShowToneSubmenu(false);
+                            }}
+                            className="flex items-center gap-1.5 flex-1 text-right"
+                          >
+                            <span>{tone.icon}</span>
+                            <span>{tone.nameAr}</span>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              playToneById(tone.id);
+                            }}
+                            className="p-1 hover:text-sky-400 text-slate-500 rounded"
+                            title="استماع"
+                          >
+                            <Play className="w-3 h-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

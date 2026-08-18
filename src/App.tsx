@@ -628,6 +628,7 @@ export default function App() {
     content: `# Telegram Android 12.x Release Notes\n\n## Modern Redesign & AI Guardian\n- **Bottom Navigation Bar**: 1-Tap swift switching between Chats, Contacts, Automation, and Settings.\n- **AI Guardian 12.x**: Smart automated group moderation, spam & crypto scam filtering.\n- **Collapsible Quotes & Markdown Reader**: Fast reading with syntax highlighting.\n- **Enhanced Polls**: Interactive voting with attached links.\n\n\`\`\`json\n{\n  "version": "12.8.2",\n  "status": "ready"\n}\n\`\`\``,
   });
   const [activeBottomNav, setActiveBottomNav] = useState<BottomNavTab>('chats');
+  const [defaultHistoryTTL, setDefaultHistoryTTL] = useState<number>(() => mtprotoService.getDefaultHistoryTTL());
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
     typeof Notification !== 'undefined' ? Notification.permission : 'default'
   );
@@ -636,32 +637,64 @@ export default function App() {
   // Telegram Stories 12.x State
   const [storyViewerOpen, setStoryViewerOpen] = useState(false);
   const [storyViewerIndex, setStoryViewerIndex] = useState(0);
-  const [storiesList, setStoriesList] = useState<TelegramStory[]>([
-    {
-      id: 'story_official',
-      user_id: 'telegram',
-      user_name: 'Telegram News',
-      user_avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150',
-      media_url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800',
-      caption: '🚀 تحديث تليجرام 12.x مع دعم كامل لحارس المجموعات الذكي والشريط السفلي السريع!',
-      views_count: 1420,
-      reactions_count: 245,
-      is_viewed: false,
-      date: 'منذ ساعتين',
-    },
-    {
-      id: 'story_enjaz',
-      user_id: 'enjaz_center',
-      user_name: 'مركز إنجاز الأكاديمي',
-      user_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      media_url: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800',
-      caption: '🎓 نظام الأتمتة المتقدم وتصنيف الروابط والبحوث الأكاديمية متاح الآن بكفاءة عالية.',
-      views_count: 890,
-      reactions_count: 180,
-      is_viewed: false,
-      date: 'منذ 4 ساعات',
-    },
-  ]);
+  const [storiesList, setStoriesList] = useState<TelegramStory[]>(() => {
+    // Load from localStorage if available
+    try {
+      const saved = localStorage.getItem('tg_stories_list');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {}
+
+    const now = Date.now();
+    return [
+      {
+        id: 'story_my_active',
+        user_id: 'me',
+        user_name: 'قصتي الحالية (أنا)',
+        user_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
+        media_url: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80',
+        caption: '🌟 مشروع تليجرام أندرويد 12.x مع دعم كامل للأتمتة والخصوصية القصوى!',
+        views_count: 58,
+        reactions_count: 14,
+        is_viewed: false,
+        created_at: new Date(now - 23.6 * 3600 * 1000).toISOString(),
+        expires_at: new Date(now + 24 * 60 * 1000).toISOString(), // Expires in 24 minutes (< 30 minutes for automatic alert demonstration)
+        date: 'منذ 23 ساعة',
+      },
+      {
+        id: 'story_official',
+        user_id: 'telegram',
+        user_name: 'Telegram News',
+        user_avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150',
+        media_url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800',
+        caption: '🚀 تحديث تليجرام 12.x مع دعم كامل لحارس المجموعات الذكي والشريط السفلي السريع!',
+        views_count: 1420,
+        reactions_count: 245,
+        is_viewed: false,
+        created_at: new Date(now - 2 * 3600 * 1000).toISOString(),
+        expires_at: new Date(now + 22 * 3600 * 1000).toISOString(),
+        date: 'منذ ساعتين',
+      },
+      {
+        id: 'story_enjaz',
+        user_id: 'enjaz_center',
+        user_name: 'مركز إنجاز الأكاديمي',
+        user_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+        media_url: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800',
+        caption: '🎓 نظام الأتمتة المتقدم وتصنيف الروابط والبحوث الأكاديمية متاح الآن بكفاءة عالية.',
+        views_count: 890,
+        reactions_count: 180,
+        is_viewed: false,
+        created_at: new Date(now - 4 * 3600 * 1000).toISOString(),
+        expires_at: new Date(now + 20 * 3600 * 1000).toISOString(),
+        date: 'منذ 4 ساعات',
+      },
+    ];
+  });
 
   // Chat Filter Category Tabs State
   const [chatFilterTab, setChatFilterTab] = useState<'all' | 'unread' | 'channels' | 'groups' | 'bots'>('all');
@@ -2081,7 +2114,7 @@ export default function App() {
 
             // If incoming from another chat and not muted, trigger real Telegram in-app notification & chime
             if (!isOut && String(currentChatId) !== cid && (!targetChat?.muted)) {
-              playTelegramIncomingSound();
+              playTelegramIncomingSound(cid);
               setInAppNotif({
                 id: String(msg.id || Date.now()),
                 chat_id: cid,
@@ -2167,7 +2200,7 @@ export default function App() {
           handleIncomingSystemEvent(sysData, currentChatId, (targetId) => selectChat(targetId));
         } else if (type === 'notification') {
           if (data.chat_id && String(currentChatId) !== String(data.chat_id)) {
-            playTelegramIncomingSound();
+            playTelegramIncomingSound(data.chat_id);
             setInAppNotif({
               id: `notif_${Date.now()}`,
               chat_id: data.chat_id,
@@ -2268,8 +2301,8 @@ export default function App() {
             });
           }
         } else if (type === 'watchword_alert' || (type === 'new_alert' && data.type === 'watchword')) {
-          playTelegramIncomingSound();
           const targetCid = data.alert_data?.chat_id || (data.chatId && data.chatId !== 1001 ? data.chatId : null) || data.chat_id || 1001;
+          playTelegramIncomingSound(targetCid);
           const targetMsgId = data.alert_data?.msg_id || data.msg_id || data.msgId;
           const word = data.word || data.alert_data?.keyword || 'مراقبة';
           const chatTitle = data.chatTitle || data.alert_data?.group_title || 'مجموعة تليجرام';
@@ -2402,6 +2435,114 @@ export default function App() {
       es.close();
     };
   }, [isLoggedIn, currentChatId]);
+
+  // ── MTPROTO 2.0 CLOUD SYNC & AUTO-DELETE TTL ───────────────────────────
+  useEffect(() => {
+    // 1. Initial sync with server default TTL
+    fetch('/api/settings/default-ttl')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.status === 'ok' && typeof d.period === 'number') {
+          setDefaultHistoryTTL(d.period);
+        }
+      })
+      .catch(() => {});
+
+    // 2. Real-time MTProto protocol listener for messages.setDefaultHistoryTTL
+    const unsubscribe = mtprotoService.subscribe((event, data) => {
+      if (event === 'default_history_ttl_updated' && data && typeof data.period === 'number') {
+        setDefaultHistoryTTL(data.period);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  const handleUpdateDefaultTTL = async (ttl: number) => {
+    try {
+      await mtprotoService.setDefaultHistoryTTL(ttl);
+      setDefaultHistoryTTL(ttl);
+      showToast(
+        ttl > 0
+          ? (lang === 'ar'
+              ? `⏱️ تم ضبط تدمير الرسائل الذاتي الافتراضي (${ttl >= 86400 ? `${ttl / 86400} يوم` : `${ttl / 60} دقيقة`}) ومزامنته عبر MTProto`
+              : `⏱️ Auto-delete messages default set to ${ttl}s`)
+          : (lang === 'ar' ? '🚫 تم إيقاف الحذف الذاتي للرسائل' : '🚫 Auto-delete disabled')
+      );
+    } catch (err) {
+      console.error('Failed to sync TTL with MTProto:', err);
+    }
+  };
+
+  // ── AUTOMATIC STORY EXPIRATION ALERT (30-MINUTE WARNING) ─────────────────
+  useEffect(() => {
+    // Keep stories persisted
+    try {
+      localStorage.setItem('tg_stories_list', JSON.stringify(storiesList));
+    } catch {}
+
+    const checkExpiringStories = () => {
+      const now = Date.now();
+      const THIRTY_MINUTES_MS = 30 * 60 * 1000;
+
+      // Track alerted story IDs to avoid repeat spamming
+      let alertedIds: string[] = [];
+      try {
+        const stored = sessionStorage.getItem('tg_alerted_story_expirations');
+        if (stored) alertedIds = JSON.parse(stored);
+      } catch {}
+
+      storiesList.forEach((story, index) => {
+        // Only monitor current user's stories or user's active story
+        const isMyStory = story.user_id === 'me' || story.id.includes('my') || story.user_name.includes('أنا');
+        if (!isMyStory || !story.expires_at) return;
+
+        const expiresTime = new Date(story.expires_at).getTime();
+        if (isNaN(expiresTime)) return;
+
+        const remainingMs = expiresTime - now;
+
+        // Trigger warning if story expires in <= 30 minutes, but is still active (> 0 ms)
+        if (remainingMs > 0 && remainingMs <= THIRTY_MINUTES_MS && !alertedIds.includes(story.id)) {
+          const remainingMinutes = Math.max(1, Math.round(remainingMs / 60000));
+
+          // Trigger In-App Heads-up Notification Banner
+          setInAppNotif({
+            id: `story_exp_${story.id}_${now}`,
+            chat_id: 'stories_me',
+            title: lang === 'ar' ? '⏳ تنبيه: قرب انتهاء صلاحية قصتك' : '⏳ Story Expiring Soon',
+            sender_name: lang === 'ar' ? 'قصص تليجرام' : 'Telegram Stories',
+            sender_avatar: story.media_url || story.user_avatar,
+            text:
+              lang === 'ar'
+                ? `ستنتهي صلاحية قصتك وتُحذف تلقائياً خلال ${remainingMinutes} دقيقة. انقر للمشاهدة أو الحفظ والتجديد!`
+                : `Your story will expire and auto-delete in ${remainingMinutes} minutes. Tap to view, save, or renew!`,
+            action_type: 'story',
+            story_index: index,
+            action_label: lang === 'ar' ? 'مشاهدة وتجديد القصة' : 'View & Renew Story',
+          });
+
+          // Mark as notified
+          alertedIds.push(story.id);
+          try {
+            sessionStorage.setItem('tg_alerted_story_expirations', JSON.stringify(alertedIds));
+          } catch {}
+        }
+      });
+    };
+
+    // Run check immediately on mount/update
+    const initialTimer = setTimeout(checkExpiringStories, 1200);
+    // Periodically re-check every 30 seconds
+    const interval = setInterval(checkExpiringStories, 30000);
+
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
+  }, [storiesList, lang]);
 
   // ── LOAD REAL CHATS & DRAFTS (IndexedDB & Cloud) ─────────────────────────
   const loadDrafts = async () => {
@@ -5125,6 +5266,7 @@ export default function App() {
       <SettingsModal
         isOpen={settingsModalOpen}
         onClose={() => setSettingsModalOpen(false)}
+        chats={chats}
         profile={{
           id: String(currentUser?.id || 'me'),
           name: currentUser?.name || `${currentUser?.first_name || ''} ${currentUser?.last_name || ''}`.trim() || 'مستخدم تليجرام',
@@ -5138,6 +5280,8 @@ export default function App() {
         }}
         theme={theme}
         onToggleTheme={toggleTheme}
+        defaultHistoryTTL={defaultHistoryTTL}
+        onUpdateDefaultTTL={handleUpdateDefaultTTL}
         onUpdateProfile={(updated) => {
           setCurrentUser((prev: any) => ({
             ...prev,
@@ -5238,6 +5382,10 @@ export default function App() {
         notification={inAppNotif}
         onOpenChat={(cid, msgId) => {
           selectChat(cid, msgId);
+          setInAppNotif(null);
+        }}
+        onOpenStory={(idx) => {
+          openStoryViewerModal(idx ?? 0);
           setInAppNotif(null);
         }}
         onDismiss={() => setInAppNotif(null)}

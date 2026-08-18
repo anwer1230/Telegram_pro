@@ -18,25 +18,61 @@ import {
   Sparkles,
   Volume2,
   VolumeX,
+  Music,
+  Play,
+  Search,
+  Users,
+  MessageSquare,
+  Radio,
+  Timer,
+  Flame,
+  Clock,
+  Cloud,
+  CheckCircle2,
 } from 'lucide-react';
-import { UserProfile, ActiveSession } from '../types';
+import { UserProfile, ActiveSession, Chat } from '../types';
+import { mtprotoService } from '../lib/mtprotoService';
+import {
+  AVAILABLE_NOTIFICATION_TONES,
+  getDefaultNotificationTone,
+  setDefaultNotificationTone,
+  getAllCustomChatTones,
+  setCustomChatTone,
+  removeCustomChatTone,
+  playToneById,
+} from '../utils/telegramPeerUtils';
+
+export const AUTO_DELETE_TTL_OPTIONS = [
+  { value: 0, labelAr: 'معطل (إيقاف)', descAr: 'الرسائل لا تُحذف تلقائياً', icon: '🚫' },
+  { value: 300, labelAr: '5 دقائق', descAr: 'تدمير بعد 5 دقائق', icon: '⏱️' },
+  { value: 3600, labelAr: '1 ساعة', descAr: 'تدمير بعد ساعة واحدة', icon: '⏳' },
+  { value: 86400, labelAr: '24 ساعة (يوم)', descAr: 'الخيار القياسي الموصى به', icon: '📅' },
+  { value: 604800, labelAr: '1 أسبوع (7 أيام)', descAr: 'تدمير تلقائي بعد أسبوع', icon: '🗓️' },
+  { value: 2592000, labelAr: '1 شهر (30 يوماً)', descAr: 'تدمير تلقائي بعد شهر', icon: '📆' },
+];
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   profile: UserProfile;
+  chats?: any[];
   onUpdateProfile?: (data: Partial<UserProfile>) => void;
   theme?: 'dark' | 'light';
   onToggleTheme?: () => void;
+  defaultHistoryTTL?: number;
+  onUpdateDefaultTTL?: (ttlInSeconds: number) => Promise<void> | void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
   profile,
+  chats = [],
   onUpdateProfile,
   theme = 'dark',
   onToggleTheme,
+  defaultHistoryTTL,
+  onUpdateDefaultTTL,
 }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'notifications' | 'privacy' | 'devices' | 'storage'>('profile');
 
@@ -48,7 +84,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMsg, setProfileMsg] = useState('');
 
-  // 2. Notifications State
+  // 2. Notifications & Custom Tones State
   const [browserNotifications, setBrowserNotifications] = useState(
     typeof Notification !== 'undefined' && Notification.permission === 'granted'
   );
@@ -56,12 +92,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [previewText, setPreviewText] = useState(true);
   const [badgeCounter, setBadgeCounter] = useState(true);
 
+  // Custom tone preferences
+  const [defaultTone, setDefaultToneState] = useState<string>('default');
+  const [customChatTones, setCustomChatTonesState] = useState<Record<string, string>>({});
+  const [selectedChatForTone, setSelectedChatForTone] = useState<string>('');
+  const [selectedToneToAssign, setSelectedToneToAssign] = useState<string>('crystal');
+  const [chatSearchFilter, setChatSearchFilter] = useState<string>('');
+  const [toneFeedbackMsg, setToneFeedbackMsg] = useState<string>('');
+
   // 3. Privacy & Security State
   const [has2FA, setHas2FA] = useState(profile.has_2fa || false);
   const [passcode2FA, setPasscode2FA] = useState('');
   const [phonePrivacy, setPhonePrivacy] = useState<'everybody' | 'contacts' | 'nobody'>('contacts');
   const [lastSeenPrivacy, setLastSeenPrivacy] = useState<'everybody' | 'contacts' | 'nobody'>('everybody');
   const [groupPrivacy, setGroupPrivacy] = useState<'everybody' | 'contacts' | 'nobody'>('everybody');
+
+  // Auto-Delete / Self-Destruct Messages State (MTProto messages.setDefaultHistoryTTL)
+  const [autoDeleteTTL, setAutoDeleteTTL] = useState<number>(defaultHistoryTTL ?? mtprotoService.getDefaultHistoryTTL());
+  const [isSyncingTTL, setIsSyncingTTL] = useState(false);
+  const [ttlFeedbackMsg, setTtlFeedbackMsg] = useState('');
 
   // 4. Sessions State
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
@@ -79,6 +128,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setBio(profile.bio || '');
       setHas2FA(profile.has_2fa || false);
       setProfileMsg('');
+      setToneFeedbackMsg('');
+
+      // Load notification tones from localStorage
+      setDefaultToneState(getDefaultNotificationTone());
+      setCustomChatTonesState(getAllCustomChatTones());
 
       // Fetch sessions
       fetchSessions();
@@ -93,6 +147,65 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       }
     }
   }, [isOpen, profile]);
+
+  const handleSetDefaultTone = (toneId: string) => {
+    setDefaultToneState(toneId);
+    setDefaultNotificationTone(toneId);
+    playToneById(toneId);
+  };
+
+  const handleAssignCustomTone = () => {
+    if (!selectedChatForTone) {
+      setToneFeedbackMsg('⚠️ يرجى اختيار محادثة أو مجموعة أولاً');
+      setTimeout(() => setToneFeedbackMsg(''), 3000);
+      return;
+    }
+
+    setCustomChatTone(selectedChatForTone, selectedToneToAssign);
+    setCustomChatTonesState(getAllCustomChatTones());
+    playToneById(selectedToneToAssign);
+
+    const chatObj = chats.find((c) => String(c.id) === String(selectedChatForTone));
+    const chatTitle = chatObj ? chatObj.title : 'المحادثة المحددة';
+    const toneObj = AVAILABLE_NOTIFICATION_TONES.find((t) => t.id === selectedToneToAssign);
+    const toneTitle = toneObj ? toneObj.nameAr : selectedToneToAssign;
+
+    setToneFeedbackMsg(`✓ تم تعيين نغمة "${toneTitle}" لـ "${chatTitle}" بنجاح!`);
+    setTimeout(() => setToneFeedbackMsg(''), 4000);
+    setSelectedChatForTone('');
+  };
+
+  const handleRemoveCustomTone = (chatId: string) => {
+    removeCustomChatTone(chatId);
+    setCustomChatTonesState(getAllCustomChatTones());
+    setToneFeedbackMsg('✓ تمت استعادة النغمة الافتراضية للمحادثة');
+    setTimeout(() => setToneFeedbackMsg(''), 3000);
+  };
+
+  const handleSaveAutoDeleteTTL = async (newTTL: number) => {
+    setAutoDeleteTTL(newTTL);
+    setIsSyncingTTL(true);
+    try {
+      if (onUpdateDefaultTTL) {
+        await onUpdateDefaultTTL(newTTL);
+      } else {
+        await mtprotoService.setDefaultHistoryTTL(newTTL);
+      }
+      const option = AUTO_DELETE_TTL_OPTIONS.find((o) => o.value === newTTL);
+      const label = option ? option.labelAr : `${newTTL} ثانية`;
+      setTtlFeedbackMsg(
+        newTTL > 0
+          ? `✓ تم تفعيل التدمير الذاتي الافتراضي للرسائل (${label}) ومزامنته مع سحابة تليجرام عبر MTProto 2.0`
+          : '✓ تم إيقاف الحذف الذاتي التلقائي للرسائل بنجاح'
+      );
+      setTimeout(() => setTtlFeedbackMsg(''), 4000);
+    } catch (err) {
+      setTtlFeedbackMsg('❌ تعذر إتمام المزامنة مع الخادم، يرجى إعادة المحاولة');
+      setTimeout(() => setTtlFeedbackMsg(''), 4000);
+    } finally {
+      setIsSyncingTTL(false);
+    }
+  };
 
   const fetchSessions = async () => {
     setLoadingSessions(true);
@@ -330,7 +443,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* TAB 2: NOTIFICATIONS & SOUNDS */}
           {activeTab === 'notifications' && (
             <div className="space-y-4 max-w-lg mx-auto">
-              <div className="p-3 bg-zinc-900/60 rounded-xl border border-zinc-800 space-y-3">
+              {toneFeedbackMsg && (
+                <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold text-center animate-fade-in flex items-center justify-center gap-2">
+                  <Check className="w-4 h-4 text-emerald-400" />
+                  <span>{toneFeedbackMsg}</span>
+                </div>
+              )}
+
+              {/* General Notification Switches */}
+              <div className="p-3.5 bg-zinc-900/60 rounded-xl border border-zinc-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-xs font-bold text-zinc-100">إشعارات المتصفح الفورية</div>
@@ -352,7 +473,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-xs font-bold text-zinc-100">أصوات الرسائل والتنبيهات</div>
+                    <div className="text-xs font-bold text-zinc-100">أصوات الرسائل والتنبيهات العامة</div>
                     <div className="text-[11px] text-zinc-400">تشغيل نغمة تليجرام عند إرسال واستقبال الرسائل</div>
                   </div>
                   <input
@@ -378,12 +499,284 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   />
                 </div>
               </div>
+
+              {/* 1. Global Default Notification Tone Selector */}
+              <div className="p-3.5 bg-zinc-900/60 rounded-xl border border-zinc-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Music className="w-4 h-4 text-sky-400" />
+                    <div>
+                      <div className="text-xs font-bold text-zinc-100">نغمة التنبيه الافتراضية لجميع المحادثات</div>
+                      <div className="text-[11px] text-zinc-400">النغمة التي تعمل لجميع المحادثات التي ليس لها تخصيص</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  {AVAILABLE_NOTIFICATION_TONES.map((tone) => {
+                    const isSelected = defaultTone === tone.id;
+                    return (
+                      <div
+                        key={tone.id}
+                        onClick={() => handleSetDefaultTone(tone.id)}
+                        className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                          isSelected
+                            ? 'bg-sky-500/15 border-sky-500/50 text-white shadow-sm'
+                            : 'bg-zinc-900/40 border-zinc-800/80 text-zinc-300 hover:bg-zinc-800/60'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-base">{tone.icon}</span>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold truncate flex items-center gap-1.5">
+                              <span>{tone.nameAr}</span>
+                              {isSelected && <span className="text-[10px] bg-sky-500 text-white px-1.5 py-0.2 rounded-full font-bold">نشطة</span>}
+                            </div>
+                            <div className="text-[10px] text-zinc-400 truncate">{tone.descAr}</div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            playToneById(tone.id);
+                          }}
+                          className="p-1.5 text-zinc-400 hover:text-sky-400 hover:bg-zinc-800 rounded-lg shrink-0 transition-colors"
+                          title="استماع للنغمة"
+                        >
+                          <Play className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2. Custom Per-Chat / Per-Group Notification Tone Configurator */}
+              <div className="p-3.5 bg-zinc-900/60 rounded-xl border border-zinc-800 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-amber-400" />
+                  <div>
+                    <div className="text-xs font-bold text-zinc-100">تخصيص نغمات تنبيه خاصة لكل محادثة أو مجموعة</div>
+                    <div className="text-[11px] text-zinc-400">حدد نغمة فريدة تميز الرسائل الواردة من محادثة محددة فورياً</div>
+                  </div>
+                </div>
+
+                {/* Form to assign a custom tone */}
+                <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80 space-y-3">
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-zinc-300">1. اختر المحادثة أو المجموعة:</label>
+                    <div className="relative">
+                      <select
+                        value={selectedChatForTone}
+                        onChange={(e) => setSelectedChatForTone(e.target.value)}
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-sky-500"
+                      >
+                        <option value="">-- اضغط لاختيار محادثة من القائمة ({chats.length} محادثة) --</option>
+                        {chats.map((c) => {
+                          const hasCustom = Boolean(customChatTones[String(c.id)]);
+                          const currentCustomTone = hasCustom ? customChatTones[String(c.id)] : null;
+                          const toneObj = currentCustomTone ? AVAILABLE_NOTIFICATION_TONES.find((t) => t.id === currentCustomTone) : null;
+                          const typeLabel = c.type === 'group' || c.type === 'supergroup' ? '👥 مجموعة' : c.type === 'channel' ? '📢 قناة' : c.type === 'bot' ? '🤖 بوت' : '👤 شخصي';
+
+                          return (
+                            <option key={c.id} value={c.id}>
+                              {typeLabel}: {c.title} {hasCustom ? `[🔔 مخصصة: ${toneObj?.nameAr || currentCustomTone}]` : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-zinc-300">2. اختر نغمة التنبيه المخصصة:</label>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={selectedToneToAssign}
+                        onChange={(e) => setSelectedToneToAssign(e.target.value)}
+                        className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-sky-500"
+                      >
+                        {AVAILABLE_NOTIFICATION_TONES.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.icon} {t.nameAr}
+                          </option>
+                        ))}
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={() => playToneById(selectedToneToAssign)}
+                        className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-sky-400 rounded-xl text-xs font-bold flex items-center gap-1.5 shrink-0 transition-colors"
+                        title="تجربة النغمة"
+                      >
+                        <Play className="w-3.5 h-3.5" />
+                        <span>استماع</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleAssignCustomTone}
+                    className="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-2 shadow transition-all"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>حفظ النغمة المخصصة للمحادثة</span>
+                  </button>
+                </div>
+
+                {/* List of active custom tones */}
+                <div className="space-y-2 pt-2">
+                  <div className="text-xs font-bold text-zinc-300 flex items-center justify-between">
+                    <span>المحادثات ذات النغمات المخصصة ({Object.keys(customChatTones).length}):</span>
+                  </div>
+
+                  {Object.keys(customChatTones).length === 0 ? (
+                    <div className="text-center py-4 px-3 rounded-xl bg-zinc-950/40 border border-dashed border-zinc-800 text-[11px] text-zinc-500">
+                      لا توجد محادثات بنغمات مخصصة حالياً. جميع المحادثات تستخدم النغمة الافتراضية.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
+                      {Object.entries(customChatTones).map(([cid, toneId]) => {
+                        const targetChat = chats.find((c) => String(c.id) === String(cid));
+                        const toneInfo = AVAILABLE_NOTIFICATION_TONES.find((t) => t.id === toneId) || {
+                          id: toneId,
+                          nameAr: toneId,
+                          icon: '🔔',
+                          descAr: '',
+                        };
+                        const title = targetChat?.title || `محادثة #${cid}`;
+                        const isGroup = targetChat?.type === 'group' || targetChat?.type === 'supergroup';
+
+                        return (
+                          <div
+                            key={cid}
+                            className="p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl flex items-center justify-between gap-2"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-sm font-bold text-zinc-200 shrink-0">
+                                {isGroup ? <Users className="w-4 h-4 text-amber-400" /> : <MessageSquare className="w-4 h-4 text-sky-400" />}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-xs font-bold text-zinc-200 truncate">{title}</div>
+                                <div className="text-[11px] text-sky-400 flex items-center gap-1">
+                                  <span>{toneInfo.icon}</span>
+                                  <span>{toneInfo.nameAr}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => playToneById(toneId)}
+                                className="p-1.5 text-zinc-400 hover:text-sky-400 hover:bg-zinc-800 rounded-lg transition-colors"
+                                title="استماع للنغمة"
+                              >
+                                <Play className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveCustomTone(cid)}
+                                className="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-zinc-800 rounded-lg transition-colors"
+                                title="إلغاء التخصيص والعودة للافتراضي"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
           {/* TAB 3: PRIVACY & SECURITY */}
           {activeTab === 'privacy' && (
             <div className="space-y-4 max-w-lg mx-auto">
+              {ttlFeedbackMsg && (
+                <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold text-center animate-fade-in flex items-center justify-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{ttlFeedbackMsg}</span>
+                </div>
+              )}
+
+              {/* 1. Self-Destruct / Auto-Delete Messages (messages.setDefaultHistoryTTL) */}
+              <div className="p-3.5 bg-zinc-900/60 rounded-xl border border-zinc-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-rose-500/20 text-rose-400">
+                      <Flame className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-zinc-100 flex items-center gap-1.5">
+                        <span>رسائل ذاتية التدمير والحذف التلقائي</span>
+                        <span className="text-[10px] font-mono bg-sky-500/20 text-sky-300 px-1.5 py-0.2 rounded-full font-bold flex items-center gap-1">
+                          <Cloud className="w-2.5 h-2.5" /> MTProto 2.0
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-zinc-400">
+                        تحديد وقت افتراضي لحذف الرسائل الجديدة في كافة المحادثات الخاصة
+                      </div>
+                    </div>
+                  </div>
+
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${autoDeleteTTL > 0 ? 'bg-amber-500/20 text-amber-300' : 'bg-zinc-800 text-zinc-400'}`}>
+                    {autoDeleteTTL > 0 ? `مفعل (${AUTO_DELETE_TTL_OPTIONS.find(o => o.value === autoDeleteTTL)?.labelAr || `${autoDeleteTTL} ث`})` : 'معطل'}
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-zinc-400 leading-relaxed bg-zinc-950/60 p-2.5 rounded-lg border border-zinc-800/80">
+                  عند تفعيل هذا الخيار، سيتم تطبيق هذا المؤقت تلقائياً على كل محادثة خاصة جديدة تبدأها. سيتم حذف الرسائل من أجهزة جميع الأطراف وسحابة تليجرام بعد انقضاء الوقت المحدد من إرسالها.
+                </p>
+
+                {/* Preset Options Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                  {AUTO_DELETE_TTL_OPTIONS.map((opt) => {
+                    const isSelected = autoDeleteTTL === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => handleSaveAutoDeleteTTL(opt.value)}
+                        disabled={isSyncingTTL}
+                        className={`p-2.5 rounded-xl border text-right transition-all flex flex-col justify-between ${
+                          isSelected
+                            ? 'bg-rose-500/15 border-rose-500/60 text-white shadow-sm ring-1 ring-rose-500/30'
+                            : 'bg-zinc-950/60 border-zinc-800 text-zinc-300 hover:bg-zinc-800/60'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full mb-1">
+                          <span className="text-base">{opt.icon}</span>
+                          {isSelected && (
+                            <span className="text-[9px] bg-rose-500 text-white px-1.5 py-0.2 rounded-full font-bold">
+                              نشط
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold truncate">{opt.labelAr}</div>
+                          <div className="text-[10px] text-zinc-400 truncate">{opt.descAr}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {isSyncingTTL && (
+                  <div className="text-center text-[11px] text-sky-400 animate-pulse flex items-center justify-center gap-1.5">
+                    <Cloud className="w-3.5 h-3.5" />
+                    <span>جاري مزامنة مؤقت التدمير الذاتي عبر بروتوكول MTProto Direct...</span>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Two-Factor Authentication & Account Privacy */}
               <div className="p-3 bg-zinc-900/60 rounded-xl border border-zinc-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">

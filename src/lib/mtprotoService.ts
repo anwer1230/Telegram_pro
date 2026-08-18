@@ -101,6 +101,7 @@ class MTProtoService {
   };
 
   private cloudDrafts: Map<number, CloudDraft> = new Map();
+  private defaultHistoryTTL: number = 0; // 0 = disabled, or seconds (e.g. 86400 for 1 day)
   private gapTimer: NodeJS.Timeout | null = null;
   private pingInterval: NodeJS.Timeout | null = null;
 
@@ -115,6 +116,31 @@ class MTProtoService {
       const savedKey = await indexedDbService.getSessionKey('mtproto_auth_key');
       const savedDcId = await indexedDbService.getSessionKey('mtproto_dc_id');
       const savedPts = await indexedDbService.getSessionKey('mtproto_pts');
+      const savedTTL = await indexedDbService.getSessionKey('mtproto_default_ttl');
+
+      if (savedTTL !== undefined && savedTTL !== null) {
+        this.defaultHistoryTTL = Number(savedTTL) || 0;
+      } else {
+        const localTTL = localStorage.getItem('tg_default_history_ttl');
+        if (localTTL) {
+          this.defaultHistoryTTL = parseInt(localTTL, 10) || 0;
+        }
+      }
+
+      // Sync from backend server if available
+      try {
+        fetch('/api/settings/default-ttl')
+          .then((res) => res.json())
+          .then((data) => {
+            if (data?.status === 'ok' && typeof data.period === 'number') {
+              this.defaultHistoryTTL = data.period;
+              localStorage.setItem('tg_default_history_ttl', String(data.period));
+              indexedDbService.saveSessionKey('mtproto_default_ttl', data.period);
+              this.emit('default_history_ttl_updated', { period: data.period, pts: this.sequenceState.pts });
+            }
+          })
+          .catch(() => {});
+      } catch {}
 
       if (savedKey) {
         this.sessionKey = savedKey;
@@ -433,6 +459,54 @@ class MTProtoService {
     this.emit('sequence_updated', { sequenceState: this.sequenceState });
 
     return event;
+  }
+
+  // Set Default Auto-Delete / Self-Destruct Timer (messages.setDefaultHistoryTTL)
+  async setDefaultHistoryTTL(periodInSeconds: number): Promise<{ period: number; success: boolean; pts: number }> {
+    const period = Math.max(0, periodInSeconds);
+    this.defaultHistoryTTL = period;
+
+    // Advance MTProto sequence state
+    this.sequenceState.pts += 1;
+    this.sequenceState.seq += 1;
+    this.sequenceState.date = Math.floor(Date.now() / 1000);
+
+    // Save locally
+    localStorage.setItem('tg_default_history_ttl', String(period));
+    await indexedDbService.saveSessionKey('mtproto_default_ttl', period);
+    await indexedDbService.saveSessionKey('mtproto_pts', this.sequenceState.pts);
+
+    // Sync to backend server
+    try {
+      await fetch('/api/settings/default-ttl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period }),
+      });
+    } catch (err) {
+      console.warn('Backend TTL sync warning:', err);
+    }
+
+    // Broadcast MTProto RPC update event
+    this.emit('default_history_ttl_updated', {
+      period,
+      pts: this.sequenceState.pts,
+      seq: this.sequenceState.seq,
+      timestamp: new Date().toLocaleTimeString('ar-EG'),
+      syncedDevices: ['تطبيق الويب (Web K)', 'الهاتف المحمول (Android/iOS)', 'خوادم تليجرام السحابية DC2'],
+    });
+
+    this.emit('sequence_updated', { sequenceState: this.sequenceState });
+
+    return {
+      period,
+      success: true,
+      pts: this.sequenceState.pts,
+    };
+  }
+
+  getDefaultHistoryTTL(): number {
+    return this.defaultHistoryTTL;
   }
 
   getIsConnected(): boolean {
