@@ -3177,16 +3177,63 @@ app.post(['/api/send_now', '/api/automation/send_monitor/send_now'], async (req:
 
 app.post('/api/start_monitoring', (req: Request, res: Response) => {
   automationState.send_monitor.enabled = true;
-  res.json({ success: true, status: 'ok', message: '▶ تم بدء المراقبة بنجاح' });
+  broadcastSSE('monitoring_status', { monitoring_active: true, status: 'running' });
+  res.json({ success: true, status: 'ok', message: '▶ بدأت المراقبة' });
 });
 
 app.post('/api/stop_monitoring', (req: Request, res: Response) => {
   automationState.send_monitor.enabled = false;
+  broadcastSSE('monitoring_status', { monitoring_active: false, status: 'stopped' });
   res.json({ success: true, status: 'ok', message: '⏹ تم إيقاف المراقبة' });
 });
 
+app.post('/api/resume_monitoring', (req: Request, res: Response) => {
+  automationState.send_monitor.enabled = true;
+  broadcastSSE('monitoring_status', { monitoring_active: true, status: 'running' });
+  res.json({ success: true, status: 'ok', message: '▶ تم استئناف المراقبة' });
+});
+
+app.get('/api/monitoring_status', (req: Request, res: Response) => {
+  const isRunning = Boolean(automationState.send_monitor.enabled);
+  const remaining = automationState.send_monitor.intervalSeconds || 3600;
+  res.json({
+    success: true,
+    running: isRunning,
+    stopped_by_duration: false,
+    remaining_seconds: isRunning ? remaining : null
+  });
+});
+
+app.get('/api/saved_settings', (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    settings: {
+      message: automationState.send_monitor.message,
+      groups: automationState.send_monitor.groups,
+      watch_words: automationState.send_monitor.watchWords,
+      interval_seconds: automationState.send_monitor.intervalSeconds,
+      schedule_duration: (automationState.send_monitor.scheduleDurationHours || 0) * 3600,
+      schedule_duration_hours: automationState.send_monitor.scheduleDurationHours,
+      sanitize_mode: automationState.send_monitor.sanitizeMode,
+      smart_required_messages: 3,
+      send_type: automationState.send_monitor.sendType,
+      auto_reply_enabled: automationState.autoreply.enabled,
+      auto_replies: automationState.autoreply.rules,
+    }
+  });
+});
+
 app.get('/api/sent_batches', (req: Request, res: Response) => {
-  res.json({ success: true, batches: batchesStore });
+  const formattedBatches = batchesStore.map(b => ({
+    id: b.id,
+    text: b.text,
+    has_media: b.has_media || false,
+    sent_at: b.sent_at,
+    edited_at: b.edited_at,
+    sent_count: b.sent_count || (b.entries ? b.entries.length : 1),
+    group_count: b.group_count || (b.entries ? b.entries.length : 1),
+  }));
+  res.json({ success: true, batches: formattedBatches });
 });
 
 app.post('/api/edit_batch', (req: Request, res: Response) => {
@@ -3194,7 +3241,6 @@ app.post('/api/edit_batch', (req: Request, res: Response) => {
   const batch = batchesStore.find(b => b.id === batch_id);
   const nowIso = new Date().toISOString();
   if (batch) {
-    const oldText = batch.text;
     batch.text = new_text;
     batch.edited_at = nowIso;
 
@@ -3211,7 +3257,7 @@ app.post('/api/edit_batch', (req: Request, res: Response) => {
     broadcastSSE('sent_batches', { batches: batchesStore });
     broadcastSSE('log_update', { message: `📝 تم تعديل دفعة الرسائل (${batch.id}) بنجاح.` });
   }
-  res.json({ success: true, status: 'ok', message: '⏳ تم تعديل الدفعة بنجاح', edited_at: nowIso });
+  res.json({ success: true, status: 'ok', message: '⏳ جارٍ تعديل الرسائل...', edited_at: nowIso });
 });
 
 app.post('/api/delete_batch', (req: Request, res: Response) => {
@@ -3232,7 +3278,7 @@ app.post('/api/delete_batch', (req: Request, res: Response) => {
     broadcastSSE('sent_batches', { batches: batchesStore });
     broadcastSSE('log_update', { message: `🗑️ تم حذف دفعة الرسائل (${deletedBatch.id}) بنجاح.` });
   }
-  res.json({ success: true, status: 'ok', message: '🗑️ تم حذف الدفعة بنجاح' });
+  res.json({ success: true, status: 'ok', message: '⏳ جارٍ حذف الرسائل...' });
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -3398,21 +3444,61 @@ app.post(['/api/autojoin/start', '/api/auto_join/advanced', '/api/automation/aut
   });
 });
 
-app.post(['/api/autojoin/stop', '/api/automation/autojoin/stop'], (req: Request, res: Response) => {
-  automationState.autojoin.status = 'idle';
-  automationState.autojoin.pendingLinks = [];
-  res.json({ success: true, status: 'ok', message: '⏹ تم إيقاف عملية الانضمام التلقائي' });
+app.get('/api/auto_join/settings', (req: Request, res: Response) => {
+  const linkList = automationState.autojoin.pendingLinks.length > 0 
+    ? automationState.autojoin.pendingLinks 
+    : (automationState.autojoin.input ? automationState.autojoin.input.split('\n').filter(Boolean) : []);
+  res.json({
+    success: true,
+    links: linkList,
+    delay: automationState.autojoin.joinDelay || 15,
+    max_retries: automationState.autojoin.maxRetries || 3,
+  });
 });
 
-app.post(['/api/autojoin/pause', '/api/automation/autojoin/pause'], (req: Request, res: Response) => {
-  const newStatus = automationState.autojoin.status === 'paused' ? 'running' : 'paused';
-  automationState.autojoin.status = newStatus;
+app.post('/api/auto_join/settings', (req: Request, res: Response) => {
+  const { links, delay, max_retries } = req.body;
+  if (links !== undefined) {
+    const list = Array.isArray(links) ? links : String(links).split('\n').filter(Boolean);
+    automationState.autojoin.input = list.join('\n');
+    automationState.autojoin.pendingLinks = [...list];
+  }
+  if (delay !== undefined) automationState.autojoin.joinDelay = Number(delay);
+  if (max_retries !== undefined) automationState.autojoin.maxRetries = Number(max_retries);
+  res.json({ success: true, message: 'تم حفظ إعدادات الانضمام التلقائي بنجاح' });
+});
+
+app.post(['/api/autojoin/stop', '/api/auto_join/stop', '/api/automation/autojoin/stop'], (req: Request, res: Response) => {
+  automationState.autojoin.status = 'idle';
+  automationState.autojoin.pendingLinks = [];
+  res.json({ success: true, status: 'ok', message: '⏹ تم إيقاف عملية الانضمام' });
+});
+
+app.post(['/api/autojoin/pause', '/api/auto_join/pause', '/api/automation/autojoin/pause'], (req: Request, res: Response) => {
+  automationState.autojoin.status = 'paused';
   res.json({
     success: true,
     status: 'ok',
-    is_paused: newStatus === 'paused',
-    message: newStatus === 'paused' ? '⏸ تم إيقاف الانضمام مؤقتاً' : '▶ تم استئناف الانضمام التلقائي'
+    is_paused: true,
+    message: '⏸ تم الإيقاف المؤقت'
   });
+});
+
+app.post(['/api/autojoin/resume', '/api/auto_join/resume', '/api/automation/autojoin/resume'], (req: Request, res: Response) => {
+  automationState.autojoin.status = 'running';
+  res.json({
+    success: true,
+    status: 'ok',
+    is_paused: false,
+    message: '▶ تم استئناف الانضمام'
+  });
+});
+
+app.post(['/api/autojoin/exit', '/api/auto_join/exit'], (req: Request, res: Response) => {
+  automationState.autojoin.status = 'idle';
+  automationState.autojoin.pendingLinks = [];
+  automationState.autojoin.input = '';
+  res.json({ success: true, message: 'تم الخروج ومسح الإعدادات' });
 });
 
 app.get('/api/get_auto_replies', (req: Request, res: Response) => {
