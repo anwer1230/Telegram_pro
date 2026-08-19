@@ -27,6 +27,7 @@ import { LinkFinderModal } from './components/LinkFinderModal';
 import { ChatThemeModal } from './components/ChatThemeModal';
 import { SyncBackupModal } from './components/SyncBackupModal';
 import { playTelegramIncomingSound, getPeerColor, getPeerInitials } from './utils/telegramPeerUtils';
+import { useTelegramSwipeNavigation } from './hooks/useTelegramSwipeNavigation';
 import { UserProfile, TelegramAccount, TelegramStory } from './types';
 import { SystemMessageItem } from './components/SystemMessageItem';
 import {
@@ -768,6 +769,12 @@ export default function App() {
   const automationModalOpenRef = useRef(automationModalOpen);
   automationModalOpenRef.current = automationModalOpen;
 
+  const sendModalOpenRef = useRef(sendModalOpen);
+  sendModalOpenRef.current = sendModalOpen;
+
+  const monitorModalOpenRef = useRef(monitorModalOpen);
+  monitorModalOpenRef.current = monitorModalOpen;
+
   const addAccountModalOpenRef = useRef(addAccountModalOpen);
   addAccountModalOpenRef.current = addAccountModalOpen;
 
@@ -1156,6 +1163,14 @@ export default function App() {
         setAutomationModalOpen(false);
         return;
       }
+      if (sendModalOpenRef.current) {
+        setSendModalOpen(false);
+        return;
+      }
+      if (monitorModalOpenRef.current) {
+        setMonitorModalOpen(false);
+        return;
+      }
       if (addAccountModalOpenRef.current) {
         setAddAccountModalOpen(false);
         return;
@@ -1200,6 +1215,32 @@ export default function App() {
       window.removeEventListener('popstate', handlePopState);
     };
   }, []);
+
+  // Telegram Android Swipe-to-Back Touch Gestures (DrKLO/Telegram Architecture)
+  useTelegramSwipeNavigation({
+    enabled: currentChatId !== null || drawerOpen || settingsModalOpen || sendModalOpen || monitorModalOpen || contactsModalOpen,
+    onSwipeBack: () => {
+      if (settingsModalOpen) {
+        setSettingsModalOpen(false);
+      } else if (sendModalOpen) {
+        setSendModalOpen(false);
+      } else if (monitorModalOpen) {
+        setMonitorModalOpen(false);
+      } else if (contactsModalOpen) {
+        setContactsModalOpen(false);
+      } else if (drawerOpen) {
+        setDrawerOpen(false);
+      } else if (currentChatId !== null) {
+        setCurrentChatId(null);
+        setSearchInChatOpen(false);
+        setReplyMsg(null);
+        setPendingAttachments([]);
+      }
+    },
+    dir: lang === 'ar' ? 'rtl' : 'ltr',
+    threshold: 65,
+    edgeThreshold: 35,
+  });
 
   const [accountsList, setAccountsList] = useState<TelegramAccount[]>([
     {
