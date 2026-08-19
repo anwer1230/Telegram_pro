@@ -57,6 +57,7 @@ interface TelegramDrawerProps {
   onOpenMTProtoSync?: () => void;
   onOpenArchiveSync?: () => void;
   onOpenMonitor?: () => void;
+  onOpenSend?: () => void;
   onNewFolder?: () => void;
   onOpenArchive?: () => void;
   onCheckUpdate?: () => void;
@@ -85,6 +86,7 @@ export const TelegramDrawer: React.FC<TelegramDrawerProps> = ({
   onOpenMTProtoSync,
   onOpenArchiveSync,
   onOpenMonitor,
+  onOpenSend,
   onNewFolder,
   onOpenArchive,
   onCheckUpdate,
@@ -273,11 +275,33 @@ export const TelegramDrawer: React.FC<TelegramDrawerProps> = ({
             {isFeaturedOpen && (
               <div className="p-1 space-y-0.5 bg-zinc-950/60 border-t border-amber-500/10 text-zinc-200">
                 <button
-                  onClick={() => handleOpenTab('send_monitor')}
-                  className="w-full p-2 rounded-xl hover:bg-zinc-900 hover:text-amber-300 flex items-center gap-2.5 transition-colors"
+                  onClick={() => {
+                    onClose();
+                    if (onOpenMonitor) onOpenMonitor();
+                    else handleOpenTab('send_monitor');
+                  }}
+                  className="w-full p-2 rounded-xl hover:bg-zinc-900 hover:text-emerald-300 flex items-center justify-between transition-colors"
                 >
-                  <Rocket className="w-4 h-4 text-amber-400" />
-                  <span>1. الإرسال والمراقبة (Send & Monitor)</span>
+                  <div className="flex items-center gap-2.5">
+                    <Rocket className="w-4 h-4 text-emerald-400" />
+                    <span className="font-bold text-emerald-300">1. المراقبة التلقائية (Radar Monitor)</span>
+                  </div>
+                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-black">منفصل ⚡</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    onClose();
+                    if (onOpenSend) onOpenSend();
+                    else handleOpenTab('send_monitor');
+                  }}
+                  className="w-full p-2 rounded-xl hover:bg-zinc-900 hover:text-amber-300 flex items-center justify-between transition-colors"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Zap className="w-4 h-4 text-amber-400" />
+                    <span className="font-bold text-amber-300">2. الإرسال الفوري والجدولة (Auto Send)</span>
+                  </div>
+                  <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-black">منفصل 🚀</span>
                 </button>
 
                 <button
@@ -285,7 +309,7 @@ export const TelegramDrawer: React.FC<TelegramDrawerProps> = ({
                   className="w-full p-2 rounded-xl hover:bg-zinc-900 hover:text-sky-300 flex items-center gap-2.5 transition-colors"
                 >
                   <Clock className="w-4 h-4 text-sky-400" />
-                  <span>2. رسائلي الدفعات (My Messages)</span>
+                  <span>3. رسائلي الدفعات (My Messages)</span>
                 </button>
 
                 <button

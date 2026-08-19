@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AutomationAIModal, AutomationTab } from './components/AutomationAIModal';
 import { SettingsModal } from './components/SettingsModal';
+import { SendOnlyModal } from './components/SendOnlyModal';
+import { MonitorOnlyModal } from './components/MonitorOnlyModal';
 import { VoiceCallModal } from './components/VoiceCallModal';
 import { ContactsModal } from './components/ContactsModal';
 import { AddAccountModal } from './components/AddAccountModal';
@@ -602,6 +604,8 @@ export default function App() {
 
   // Automation & Tools Suite State
   const [automationModalOpen, setAutomationModalOpen] = useState(false);
+  const [sendModalOpen, setSendModalOpen] = useState(false);
+  const [monitorModalOpen, setMonitorModalOpen] = useState(false);
   const [automationActiveTab, setAutomationActiveTab] = useState<AutomationTab>('batches');
   const [automationDropdownOpen, setAutomationDropdownOpen] = useState(true);
 
@@ -810,6 +814,18 @@ export default function App() {
   const openSettingsModal = () => {
     pushNavState('modal', 'settings');
     setSettingsModalOpen(true);
+    setDrawerOpen(false);
+  };
+
+  const openSendModal = () => {
+    pushNavState('modal', 'send_only');
+    setSendModalOpen(true);
+    setDrawerOpen(false);
+  };
+
+  const openMonitorModal = () => {
+    pushNavState('modal', 'monitor_only');
+    setMonitorModalOpen(true);
     setDrawerOpen(false);
   };
 
@@ -3830,11 +3846,26 @@ export default function App() {
               <div style={{ padding: '4px 6px', display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <div
                   className="drawer-item-compact"
-                  style={{ color: '#ffb300' }}
-                  onClick={() => openAutomationSuite('send_monitor')}
+                  style={{ color: '#00e676', background: 'rgba(0, 230, 118, 0.08)' }}
+                  onClick={openMonitorModal}
+                >
+                  <i className="fas fa-satellite-dish" />
+                  <span style={{ fontWeight: 700 }}>{lang === 'ar' ? '1. المراقبة التلقائية' : 'Radar Monitor'}</span>
+                  <span className="compact-badge" style={{ background: 'rgba(0, 230, 118, 0.2)', color: '#00e676' }}>
+                    {lang === 'ar' ? 'منفصل' : 'Solo'}
+                  </span>
+                </div>
+
+                <div
+                  className="drawer-item-compact"
+                  style={{ color: '#ffb300', background: 'rgba(255, 179, 0, 0.08)' }}
+                  onClick={openSendModal}
                 >
                   <i className="fas fa-paper-plane" />
-                  <span>{lang === 'ar' ? 'المراقبة والإرسال' : 'Send & Monitor'}</span>
+                  <span style={{ fontWeight: 700 }}>{lang === 'ar' ? '2. الإرسال والجدولة' : 'Auto Send'}</span>
+                  <span className="compact-badge" style={{ background: 'rgba(255, 179, 0, 0.2)', color: '#ffb300' }}>
+                    {lang === 'ar' ? 'منفصل' : 'Solo'}
+                  </span>
                 </div>
 
                 <div
@@ -5260,6 +5291,18 @@ export default function App() {
         isOpen={automationModalOpen}
         onClose={() => setAutomationModalOpen(false)}
         initialTab={automationActiveTab}
+      />
+
+      {/* ══ ISOLATED SEND MODAL ══ */}
+      <SendOnlyModal
+        isOpen={sendModalOpen}
+        onClose={() => setSendModalOpen(false)}
+      />
+
+      {/* ══ ISOLATED RADAR MONITOR MODAL ══ */}
+      <MonitorOnlyModal
+        isOpen={monitorModalOpen}
+        onClose={() => setMonitorModalOpen(false)}
       />
 
       {/* ══ SETTINGS MODAL ══ */}
