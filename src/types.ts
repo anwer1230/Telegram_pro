@@ -172,6 +172,21 @@ export interface ChatFolder {
   filter_types?: string[];
 }
 
+export interface User {
+  id: string | number;
+  first_name?: string;
+  last_name?: string;
+  name?: string;
+  username?: string;
+  phone?: string;
+  photo?: string | null;
+  avatar?: string;
+  bio?: string;
+  is_premium?: boolean;
+  is_bot?: boolean;
+  status?: string;
+}
+
 export interface UserProfile {
   id?: string | number;
   uid?: string | number;

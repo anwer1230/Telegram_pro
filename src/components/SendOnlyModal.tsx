@@ -54,6 +54,12 @@ export const SendOnlyModal: React.FC<SendOnlyModalProps> = ({
   const [uploadedImages, setUploadedImages] = useState<Array<{ name: string; data: string; type: string }>>([]);
   const [isSending, setIsSending] = useState(false);
   const [saveStatus, setSaveStatus] = useState('');
+  const [isSendingActive, setIsSendingActive] = useState<boolean>(() => {
+    return localStorage.getItem('tg_auto_send_active') === 'true';
+  });
+  const [isPaused, setIsPaused] = useState<boolean>(() => {
+    return localStorage.getItem('tg_auto_send_paused') === 'true';
+  });
 
   const [logs, setLogs] = useState<Array<{ id: string; time: string; message: string; type: 'info' | 'success' | 'warn' | 'error' }>>([
     {
@@ -102,9 +108,50 @@ export const SendOnlyModal: React.FC<SendOnlyModalProps> = ({
           if (data.settings.sanitize_mode && !localStorage.getItem('tg_auto_send_sanitize')) {
             setSanitizeMode(data.settings.sanitize_mode);
           }
+          if (data.settings.send_type && !localStorage.getItem('tg_auto_send_type')) {
+            setSendType(data.settings.send_type);
+          }
+        }
+        if (data && data.automation && data.automation.send_monitor) {
+          const sm = data.automation.send_monitor;
+          if (sm.is_sending_active !== undefined) {
+            setIsSendingActive(sm.is_sending_active);
+            localStorage.setItem('tg_auto_send_active', String(sm.is_sending_active));
+          }
+          if (sm.is_paused !== undefined) {
+            setIsPaused(sm.is_paused);
+            localStorage.setItem('tg_auto_send_paused', String(sm.is_paused));
+          }
         }
       })
       .catch(() => {});
+
+    // SSE listener for real-time status updates
+    const es = new EventSource('/api/events');
+    es.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'send_status_update' && payload.data) {
+          if (payload.data.is_sending_active !== undefined) {
+            setIsSendingActive(payload.data.is_sending_active);
+            localStorage.setItem('tg_auto_send_active', String(payload.data.is_sending_active));
+          }
+          if (payload.data.is_paused !== undefined) {
+            setIsPaused(payload.data.is_paused);
+            localStorage.setItem('tg_auto_send_paused', String(payload.data.is_paused));
+          }
+          if (payload.data.message) {
+            addLog(payload.data.message, 'info');
+          }
+        } else if (payload.type === 'log_update' && payload.data?.message) {
+          addLog(payload.data.message, 'info');
+        }
+      } catch (e) {}
+    };
+
+    return () => {
+      es.close();
+    };
   }, [isOpen]);
 
   // Save changes locally whenever they change
@@ -135,6 +182,14 @@ export const SendOnlyModal: React.FC<SendOnlyModalProps> = ({
   useEffect(() => {
     localStorage.setItem('tg_auto_send_sanitize', sanitizeMode);
   }, [sanitizeMode]);
+
+  useEffect(() => {
+    localStorage.setItem('tg_auto_send_active', String(isSendingActive));
+  }, [isSendingActive]);
+
+  useEffect(() => {
+    localStorage.setItem('tg_auto_send_paused', String(isPaused));
+  }, [isPaused]);
 
   if (!isOpen) return null;
 
@@ -178,8 +233,8 @@ export const SendOnlyModal: React.FC<SendOnlyModalProps> = ({
       });
       const data = await res.json();
       if (data.success) {
-        setSaveStatus(isAr ? 'تم الحفظ وتثبيت الإعدادات بنجاح!' : 'Settings Saved!');
-        addLog(isAr ? '💾 تم حفظ وتثبيت إعدادات الإرسال في الخادم والمحلي' : '💾 Send settings saved successfully', 'success');
+        setSaveStatus(isAr ? 'تم حفظ وتثبيت الإعدادات بنجاح!' : 'Settings Saved!');
+        addLog(isAr ? '💾 تم حفظ وتثبيت إعدادات الإرسال في الخادم والمحلي بنجاح' : '💾 Send settings saved successfully', 'success');
       } else {
         setSaveStatus(isAr ? 'حدث خطأ أثناء الحفظ' : 'Error saving');
       }
@@ -187,6 +242,84 @@ export const SendOnlyModal: React.FC<SendOnlyModalProps> = ({
     } catch (e: any) {
       setSaveStatus(isAr ? 'خطأ في الاتصال' : 'Connection error');
       setTimeout(() => setSaveStatus(''), 3500);
+    }
+  };
+
+  const handleStartSending = async () => {
+    const msg = messageText.trim();
+    const grps = groupsInput.trim();
+    const sendToAll = allGroupsSelected;
+
+    if (!msg && uploadedImages.length === 0) {
+      addLog(isAr ? '⚠️ يرجى كتابة نص الرسالة أو رفع صورة على الأقل' : '⚠️ Enter text or attach image', 'warn');
+      return;
+    }
+    if (!sendToAll && !grps) {
+      addLog(isAr ? '⚠️ يرجى إدخال معرفات المجموعات أو اختيار "كل المجموعات"' : '⚠️ Provide groups or select All Groups', 'warn');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/send/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: msg,
+          groups: grps,
+          interval_minutes: intervalMinutes,
+          sanitize_mode: sanitizeMode,
+          send_type: sendType,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsSendingActive(true);
+        setIsPaused(false);
+        addLog(isAr ? '▶️ تم بدء مهمة الإرسال في الخلفية بنجاح!' : '▶️ Background send task started!', 'success');
+      }
+    } catch (e: any) {
+      addLog(isAr ? '❌ فشل بدء الإرسال: ' + e.message : '❌ Failed to start: ' + e.message, 'error');
+    }
+  };
+
+  const handlePauseSending = async () => {
+    try {
+      const res = await fetch('/api/send/pause', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setIsPaused(true);
+        addLog(isAr ? '⏸️ تم إيقاف الإرسال مؤقتاً (توقف مؤقت)' : '⏸️ Send paused', 'warn');
+      }
+    } catch (e: any) {
+      addLog(isAr ? '❌ خطأ أثناء الإيقاف المؤقت' : '❌ Pause error', 'error');
+    }
+  };
+
+  const handleResumeSending = async () => {
+    try {
+      const res = await fetch('/api/send/resume', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setIsPaused(false);
+        setIsSendingActive(true);
+        addLog(isAr ? '▶️ تم استئناف الإرسال في الخلفية بنجاح' : '▶️ Send resumed', 'success');
+      }
+    } catch (e: any) {
+      addLog(isAr ? '❌ خطأ أثناء الاستئناف' : '❌ Resume error', 'error');
+    }
+  };
+
+  const handleStopSending = async () => {
+    try {
+      const res = await fetch('/api/send/stop', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setIsSendingActive(false);
+        setIsPaused(false);
+        addLog(isAr ? '⏹️ تم إيقاف مهمة الإرسال كلياً' : '⏹️ Send stopped', 'info');
+      }
+    } catch (e: any) {
+      addLog(isAr ? '❌ خطأ أثناء الإيقاف' : '❌ Stop error', 'error');
     }
   };
 
@@ -497,16 +630,97 @@ export const SendOnlyModal: React.FC<SendOnlyModalProps> = ({
                 </div>
               </div>
 
-              {/* Action Trigger Buttons */}
-              <div className="space-y-2">
+              {/* Action Trigger Buttons: Save, Start, Pause, Resume, Stop, and Send Now */}
+              <div className="space-y-2.5">
+                {/* Background Running Status Badge */}
+                <div className="bg-zinc-950/80 border border-zinc-800 rounded-xl p-2.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full ${
+                      isSendingActive
+                        ? isPaused
+                          ? 'bg-amber-400 animate-pulse'
+                          : 'bg-emerald-400 animate-ping'
+                        : 'bg-zinc-600'
+                    }`} />
+                    <span className="text-xs font-bold text-zinc-200">
+                      {isSendingActive
+                        ? isPaused
+                          ? (isAr ? 'حالة الإرسال: متوقف مؤقتاً ⏸️' : 'Status: Paused ⏸️')
+                          : (isAr ? 'حالة الإرسال: يعمل في الخلفية 🟢' : 'Status: Running in background 🟢')
+                        : (isAr ? 'حالة الإرسال: متوقف ⏹️' : 'Status: Idle ⏹️')}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-zinc-400 font-mono">
+                    {isSendingActive ? (isPaused ? 'PAUSED' : 'ACTIVE') : 'STOPPED'}
+                  </span>
+                </div>
+
+                {/* Primary Control Buttons Grid: Save, Start, Pause, Resume, Stop */}
+                <div className="grid grid-cols-2 gap-2">
+                  {/* زر حفظ الإعدادات */}
+                  <button
+                    type="button"
+                    onClick={handleSaveConfig}
+                    className="py-2.5 px-3 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{isAr ? 'حفظ الإعدادات 💾' : 'Save Settings'}</span>
+                  </button>
+
+                  {/* زر بدء الإرسال */}
+                  <button
+                    type="button"
+                    onClick={handleStartSending}
+                    disabled={isSendingActive && !isPaused}
+                    className="py-2.5 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/20 disabled:opacity-40 active:scale-95"
+                  >
+                    <Play className="w-4 h-4" />
+                    <span>{isAr ? 'بدء الإرسال ▶️' : 'Start Sending'}</span>
+                  </button>
+
+                  {/* زر توقف مؤقت / استئناف */}
+                  {!isPaused ? (
+                    <button
+                      type="button"
+                      onClick={handlePauseSending}
+                      disabled={!isSendingActive}
+                      className="py-2.5 px-3 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 active:scale-95"
+                    >
+                      <Pause className="w-4 h-4" />
+                      <span>{isAr ? 'توقف مؤقت ⏸️' : 'Pause'}</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleResumeSending}
+                      className="py-2.5 px-3 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95"
+                    >
+                      <Play className="w-4 h-4" />
+                      <span>{isAr ? 'استئناف الإرسال ⏯️' : 'Resume'}</span>
+                    </button>
+                  )}
+
+                  {/* زر توقف كامل */}
+                  <button
+                    type="button"
+                    onClick={handleStopSending}
+                    disabled={!isSendingActive && !isPaused}
+                    className="py-2.5 px-3 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 active:scale-95"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>{isAr ? 'إيقاف كلي ⏹️' : 'Stop'}</span>
+                  </button>
+                </div>
+
+                {/* زر إرسال فوري الآن */}
                 <button
                   type="button"
                   onClick={handleSendNow}
                   disabled={isSending}
-                  className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black rounded-xl text-sm shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black rounded-xl text-xs sm:text-sm shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98]"
                 >
                   <Rocket className={`w-4 h-4 ${isSending ? 'animate-spin' : ''}`} />
-                  <span>{isSending ? (isAr ? 'جاري الإرسال الفعلي...' : 'Sending...') : (isAr ? 'بدء الإرسال الفوري الآن 🚀' : 'Send Broadcast Now 🚀')}</span>
+                  <span>{isSending ? (isAr ? 'جاري الإرسال الفعلي...' : 'Sending...') : (isAr ? 'إرسال فوري الآن دفعة واحدة 🚀' : 'Send Broadcast Now 🚀')}</span>
                 </button>
               </div>
 

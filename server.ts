@@ -83,6 +83,8 @@ let automationState: any = {
   learning_nodes: 0,
   send_monitor: {
     enabled: false,
+    is_sending_active: false,
+    is_paused: false,
     message: '',
     groups: [],
     watchWords: [],
@@ -2850,8 +2852,10 @@ async function executeBulkSend(text: string, targetGroupLinksOrNames?: string[] 
 setInterval(async () => {
   const now = Date.now();
 
-  // 1. Send & Monitor Scheduled Runner
-  if (automationState.send_monitor.enabled && automationState.send_monitor.sendType === 'scheduled') {
+  // 1. Send & Monitor Scheduled Runner (Runs in the background persistently)
+  if (automationState.send_monitor.enabled && 
+      (automationState.send_monitor.sendType === 'scheduled' || automationState.send_monitor.is_sending_active) && 
+      !automationState.send_monitor.is_paused) {
     const intervalMs = (automationState.send_monitor.intervalSeconds || 3600) * 1000;
     const lastRun = automationState.send_monitor.lastRunTimestamp || 0;
     if (now - lastRun >= intervalMs) {
@@ -2859,15 +2863,16 @@ setInterval(async () => {
       try {
         const res = await executeBulkSend(
           automationState.send_monitor.message,
-          automationState.send_monitor.groups
+          automationState.send_monitor.groups,
+          automationState.send_monitor.sanitizeMode === 'smart'
         );
         sendSavedMessagesNotification(
-          'إرسال مجدول دوري ⏱️',
-          `تم تنفيذ حملة الإرسال المجدولة بنجاح إلى ${res.count} مجموعة/قناة.\n\n📝 مقتطف الرسالة:\n"${(automationState.send_monitor.message || '').substring(0, 100)}..."`,
+          'إرسال مجدول دوري بالخلفية ⏱️',
+          `تم تنفيذ حملة الإرسال المجدولة بالخلفية بنجاح إلى ${res.count} مجموعة/قناة.\n\n📝 مقتطف الرسالة:\n"${(automationState.send_monitor.message || '').substring(0, 100)}..."`,
           'bulk_send'
         );
       } catch (err: any) {
-        console.error('Error in scheduled send execution:', err);
+        console.error('Error in scheduled background send execution:', err);
       }
     }
   }
@@ -3029,7 +3034,101 @@ app.post(['/api/save_settings', '/api/automation/send_monitor/save'], (req: Requ
   if (send_type !== undefined || sendType !== undefined) automationState.send_monitor.sendType = send_type || sendType;
   if (enabled !== undefined) automationState.send_monitor.enabled = Boolean(enabled);
 
-  res.json({ success: true, status: 'ok', message: '💾 تم حفظ وتفعيل إعدادات الإرسال والمراقبة بنجاح!', send_monitor: automationState.send_monitor });
+  broadcastSSE('automation_settings_updated', automationState.send_monitor);
+  res.json({ success: true, status: 'ok', message: '💾 تم حفظ وتثبيت إعدادات الإرسال بنجاح واستمرار عملها بالخلفية!', send_monitor: automationState.send_monitor });
+});
+
+// Control endpoints for Bulk Send & Scheduling with Pause/Resume/Stop/Start
+app.post(['/api/send/start', '/api/automation/send/start'], (req: Request, res: Response) => {
+  const { message, groups, interval_minutes, sanitize_mode, send_type } = req.body;
+  if (message !== undefined) automationState.send_monitor.message = message;
+  if (groups !== undefined) automationState.send_monitor.groups = Array.isArray(groups) ? groups : String(groups).split('\n').filter(Boolean);
+  if (interval_minutes !== undefined) automationState.send_monitor.intervalSeconds = Number(interval_minutes) * 60;
+  if (sanitize_mode !== undefined) automationState.send_monitor.sanitizeMode = sanitize_mode;
+  if (send_type !== undefined) automationState.send_monitor.sendType = send_type;
+
+  automationState.send_monitor.enabled = true;
+  automationState.send_monitor.is_sending_active = true;
+  automationState.send_monitor.is_paused = false;
+
+  broadcastSSE('send_status_update', {
+    is_sending_active: true,
+    is_paused: false,
+    enabled: true,
+    send_type: automationState.send_monitor.sendType,
+    message: '▶️ تم بدء عملية الإرسال بنجاح وتعمل في الخلفية بشكل دائم'
+  });
+  broadcastSSE('log_update', { message: '▶️ تم بدء تشغيل مهمة الإرسال في الخلفية' });
+
+  res.json({
+    success: true,
+    status: 'running',
+    message: '▶️ تم بدء تشغيل الإرسال بالخلفية بنجاح!',
+    send_monitor: automationState.send_monitor
+  });
+});
+
+app.post(['/api/send/pause', '/api/automation/send/pause'], (req: Request, res: Response) => {
+  automationState.send_monitor.is_paused = true;
+  broadcastSSE('send_status_update', {
+    is_sending_active: automationState.send_monitor.is_sending_active,
+    is_paused: true,
+    enabled: automationState.send_monitor.enabled,
+    message: '⏸️ تم إيقاف الإرسال مؤقتاً'
+  });
+  broadcastSSE('log_update', { message: '⏸️ تم إيقاف الإرسال مؤقتاً (Pause)' });
+
+  res.json({
+    success: true,
+    status: 'paused',
+    message: '⏸️ تم إيقاف عملية الإرسال مؤقتاً',
+    send_monitor: automationState.send_monitor
+  });
+});
+
+app.post(['/api/send/resume', '/api/automation/send/resume'], (req: Request, res: Response) => {
+  automationState.send_monitor.is_paused = false;
+  automationState.send_monitor.is_sending_active = true;
+  automationState.send_monitor.enabled = true;
+
+  broadcastSSE('send_status_update', {
+    is_sending_active: true,
+    is_paused: false,
+    enabled: true,
+    message: '▶️ تم استئناف الإرسال في الخلفية'
+  });
+  broadcastSSE('log_update', { message: '▶️ تم استئناف مهمة الإرسال في الخلفية (Resume)' });
+
+  res.json({
+    success: true,
+    status: 'running',
+    message: '▶️ تم استئناف الإرسال بنجاح!',
+    send_monitor: automationState.send_monitor
+  });
+});
+
+app.post(['/api/send/stop', '/api/automation/send/stop'], (req: Request, res: Response) => {
+  automationState.send_monitor.is_sending_active = false;
+  automationState.send_monitor.is_paused = false;
+  // Keep monitoring enabled if user only wants to stop periodic sending, but disable scheduled sender
+  if (automationState.send_monitor.sendType === 'scheduled') {
+    automationState.send_monitor.sendType = 'manual';
+  }
+
+  broadcastSSE('send_status_update', {
+    is_sending_active: false,
+    is_paused: false,
+    enabled: automationState.send_monitor.enabled,
+    message: '⏹️ تم إيقاف عملية الإرسال كلياً'
+  });
+  broadcastSSE('log_update', { message: '⏹️ تم إيقاف مهمة الإرسال (Stop)' });
+
+  res.json({
+    success: true,
+    status: 'stopped',
+    message: '⏹️ تم إيقاف الإرسال بالكامل',
+    send_monitor: automationState.send_monitor
+  });
 });
 
 app.get('/api/get_login_status', (req: Request, res: Response) => {

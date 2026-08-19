@@ -26,6 +26,12 @@ export const SendMonitorTab: React.FC<SendMonitorTabProps> = ({
   const [selectedOption, setSelectedOption] = useState<'salam' | 'skip' | 'smart' | 'always' | 'off'>('salam');
   const [uploadedImages, setUploadedImages] = useState<Array<{ name: string; data: string; type: string }>>([]);
   const [isSending, setIsSending] = useState(false);
+  const [isSendingActive, setIsSendingActive] = useState<boolean>(() => {
+    return localStorage.getItem('tg_send_mon_active') === 'true';
+  });
+  const [isPaused, setIsPaused] = useState<boolean>(() => {
+    return localStorage.getItem('tg_send_mon_paused') === 'true';
+  });
   const [logs, setLogs] = useState<Array<{ id: string; time: string; message: string }>>([
     {
       id: 'init',
@@ -194,6 +200,91 @@ export const SendMonitorTab: React.FC<SendMonitorTabProps> = ({
   const removeImage = (index: number) => {
     setUploadedImages((prev) => prev.filter((_, i) => i !== index));
     addLog('🗑️ حذف صورة');
+  };
+
+  const startSending = async () => {
+    const msg = messageText.trim();
+    const grps = groupsInput.trim();
+    const sendToAll = allGroupsSelected;
+
+    if (!msg && uploadedImages.length === 0) {
+      addLog('⚠️ اكتب رسالة أو ارفع صورة على الأقل');
+      return;
+    }
+    if (!sendToAll && !grps) {
+      addLog('⚠️ حدد المجموعات أو اختر "كل المجموعات"');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/send/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: msg,
+          groups: grps,
+          interval_minutes: intervalMinutes,
+          sanitize_mode: selectedOption,
+          send_type: sendType,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsSendingActive(true);
+        setIsPaused(false);
+        localStorage.setItem('tg_send_mon_active', 'true');
+        localStorage.setItem('tg_send_mon_paused', 'false');
+        addLog('▶️ بدأت مهمة الإرسال في الخلفية');
+      }
+    } catch (e: any) {
+      addLog('❌ فشل بدء الإرسال: ' + e.message);
+    }
+  };
+
+  const pauseSending = async () => {
+    try {
+      const res = await fetch('/api/send/pause', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setIsPaused(true);
+        localStorage.setItem('tg_send_mon_paused', 'true');
+        addLog('⏸️ تم التوقف المؤقت للإرسال');
+      }
+    } catch (e: any) {
+      addLog('❌ خطأ أثناء الإيقاف المؤقت');
+    }
+  };
+
+  const resumeSending = async () => {
+    try {
+      const res = await fetch('/api/send/resume', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setIsPaused(false);
+        setIsSendingActive(true);
+        localStorage.setItem('tg_send_mon_paused', 'false');
+        localStorage.setItem('tg_send_mon_active', 'true');
+        addLog('▶️ تم استئناف الإرسال في الخلفية');
+      }
+    } catch (e: any) {
+      addLog('❌ خطأ أثناء الاستئناف');
+    }
+  };
+
+  const stopSending = async () => {
+    try {
+      const res = await fetch('/api/send/stop', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setIsSendingActive(false);
+        setIsPaused(false);
+        localStorage.setItem('tg_send_mon_active', 'false');
+        localStorage.setItem('tg_send_mon_paused', 'false');
+        addLog('⏹️ تم إيقاف مهمة الإرسال بالكامل');
+      }
+    } catch (e: any) {
+      addLog('❌ خطأ أثناء الإيقاف');
+    }
   };
 
   const saveSettings = async () => {
@@ -620,23 +711,97 @@ export const SendMonitorTab: React.FC<SendMonitorTabProps> = ({
               </div>
             </div>
 
-            {/* أزرار الإجراءات الرئيسية */}
-            <div className="grid grid-cols-2 gap-2">
+            {/* أزرار التحكم والإجراءات الشاملة (حفظ، بدء الإرسال، توقف، استئناف) */}
+            <div className="space-y-2">
+              {/* شريط حالة مهمة الإرسال المستمر */}
+              <div className="bg-zinc-950/80 border border-zinc-800 rounded-xl p-2.5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${
+                    isSendingActive
+                      ? isPaused
+                        ? 'bg-amber-400 animate-pulse'
+                        : 'bg-emerald-400 animate-ping'
+                      : 'bg-zinc-600'
+                  }`} />
+                  <span className="text-xs font-bold text-zinc-200">
+                    {isSendingActive
+                      ? isPaused
+                        ? 'حالة الإرسال: متوقف مؤقتاً ⏸️'
+                        : 'حالة الإرسال: يعمل في الخلفية 🟢'
+                      : 'حالة الإرسال: متوقف ⏹️'}
+                  </span>
+                </div>
+                <span className="text-[10px] text-zinc-400 font-mono">
+                  {isSendingActive ? (isPaused ? 'PAUSED' : 'ACTIVE') : 'STOPPED'}
+                </span>
+              </div>
+
+              {/* أزرار التحكم 4x */}
+              <div className="grid grid-cols-2 gap-2">
+                {/* زر حفظ الإعدادات */}
+                <button
+                  type="button"
+                  className="w-full py-2.5 px-3 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+                  onClick={saveSettings}
+                >
+                  <i className="fas fa-save text-sm" />
+                  <span>حفظ الإعدادات 💾</span>
+                </button>
+
+                {/* زر بدء الإرسال */}
+                <button
+                  type="button"
+                  className="w-full py-2.5 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/20 disabled:opacity-40 active:scale-95"
+                  onClick={startSending}
+                  disabled={isSendingActive && !isPaused}
+                >
+                  <i className="fas fa-play text-sm" />
+                  <span>بدء الإرسال ▶️</span>
+                </button>
+
+                {/* زر توقف مؤقت / استئناف */}
+                {!isPaused ? (
+                  <button
+                    type="button"
+                    className="w-full py-2.5 px-3 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 active:scale-95"
+                    onClick={pauseSending}
+                    disabled={!isSendingActive}
+                  >
+                    <i className="fas fa-pause text-sm" />
+                    <span>توقف مؤقت ⏸️</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="w-full py-2.5 px-3 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95"
+                    onClick={resumeSending}
+                  >
+                    <i className="fas fa-play text-sm" />
+                    <span>استئناف الإرسال ⏯️</span>
+                  </button>
+                )}
+
+                {/* زر إيقاف كلي */}
+                <button
+                  type="button"
+                  className="w-full py-2.5 px-3 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 active:scale-95"
+                  onClick={stopSending}
+                  disabled={!isSendingActive && !isPaused}
+                >
+                  <i className="fas fa-stop text-sm" />
+                  <span>إيقاف كلي ⏹️</span>
+                </button>
+              </div>
+
+              {/* زر إرسال فوري دفعة واحدة */}
               <button
+                type="button"
                 className="w-full py-3 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-[0.98] text-zinc-950 font-black rounded-xl text-xs sm:text-sm transition-all disabled:opacity-60 flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20"
                 onClick={sendNow}
                 disabled={isSending}
               >
                 <i className={`fas ${isSending ? 'fa-spinner fa-spin' : 'fa-paper-plane'}`} />
-                <span>{isSending ? 'جاري الإرسال...' : 'إرسال فوري الآن 🚀'}</span>
-              </button>
-
-              <button
-                className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-bold rounded-xl text-xs sm:text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20"
-                onClick={saveSettings}
-              >
-                <i className="fas fa-save" />
-                <span>حفظ الإعدادات 💾</span>
+                <span>{isSending ? 'جاري الإرسال الفعلي...' : 'إرسال فوري الآن دفعة واحدة 🚀'}</span>
               </button>
             </div>
 
