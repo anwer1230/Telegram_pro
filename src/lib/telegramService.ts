@@ -310,28 +310,72 @@ function setupClientEventHandlers(client: TelegramClient) {
 
 export async function fetchDialogsSafe(client: TelegramClient): Promise<any[]> {
   try {
-    const dialogs = await client.getDialogs({ limit: 50 });
+    const dialogs = await client.getDialogs({ limit: 60 });
     return dialogs.map((d: any) => {
       const rawId = d.id ? String(d.id) : (d.entity?.id ? String(d.entity.id) : String(Math.random()));
       const chatId = rawId.startsWith('-100') ? rawId.replace('-100', '') : rawId.replace('-', '');
       const numId = parseInt(chatId, 10) || Math.abs(parseInt(rawId, 10)) || Math.floor(Math.random() * 100000);
 
-      const isBroadcast = !!(d.entity?.broadcast);
-      const isCreator = !!(d.entity?.creator);
-      const isAdmin = !!(d.entity?.adminRights || d.entity?.creator);
-      let canSendMessages = true;
-      if (isBroadcast) {
-        canSendMessages = isCreator || !!(d.entity?.adminRights?.postMessages);
-      } else if (d.entity?.defaultBannedRights?.sendMessages || d.entity?.bannedRights?.sendMessages) {
-        canSendMessages = isAdmin;
+      const entity = d.entity || {};
+      const entityClass = entity.className || entity._ || '';
+      
+      const isForbidden = entityClass.includes('Forbidden') || entityClass.includes('forbidden') || entityClass === 'ChatForbidden' || entityClass === 'ChannelForbidden';
+      const isKicked = !!(entity.kicked || entity.left);
+      const isBanned = !!(entity.banned);
+      const isBroadcast = !!(entity.broadcast);
+      const isCreator = !!(entity.creator);
+      const isAdmin = !!(entity.adminRights || entity.creator);
+
+      // Restriction Reasons (e.g. copyright, terms violation)
+      let restrictionReason: any[] = [];
+      if (Array.isArray(entity.restrictionReason)) {
+        restrictionReason = entity.restrictionReason.map((r: any) => ({
+          platform: r.platform || 'all',
+          reason: r.reason || 'restricted',
+          text: r.text || 'هذه المحادثة غير متوفرة بسبب مخالفة الشروط أو القيود السحابية.',
+        }));
       }
 
-      const type = d.isGroup ? 'group' : (isBroadcast || d.isChannel) ? 'channel' : d.isUser ? 'private' : (d.entity?.title ? 'group' : 'private');
+      let forbiddenReason = '';
+      if (isForbidden) {
+        forbiddenReason = 'هذه المجموعة أو القناة مغلقة أو محظورة على خوادم تليجرام.';
+      } else if (restrictionReason.length > 0) {
+        forbiddenReason = restrictionReason[0].text || 'المحادثة مقيدة لأسباب قانونية أو حقوق نشر.';
+      } else if (isKicked) {
+        forbiddenReason = 'أنت لست عضواً في هذه المجموعة (تمت إزالتك أو غادرت).';
+      }
+
+      // Extract User's Banned Rights in this chat
+      const bannedRights = entity.bannedRights || entity.banned_rights;
+      const defaultBannedRights = entity.defaultBannedRights || entity.default_banned_rights;
+
+      // In MTProto: bannedRights.sendMessages === true means user is prohibited from sending messages!
+      const isUserRestrictedFromSending = !!(bannedRights && (bannedRights.sendMessages || bannedRights.send_messages));
+      const isDefaultRestrictedFromSending = !!(defaultBannedRights && (defaultBannedRights.sendMessages || defaultBannedRights.send_messages));
+      
+      let canSendMessages = true;
+      let isRestricted = false;
+
+      if (isForbidden || isKicked || isBanned) {
+        canSendMessages = false;
+      } else if (isBroadcast) {
+        canSendMessages = isCreator || !!(entity.adminRights?.postMessages || entity.adminRights?.post_messages);
+      } else if (isUserRestrictedFromSending) {
+        canSendMessages = false;
+        isRestricted = true;
+      } else if (isDefaultRestrictedFromSending && !isAdmin) {
+        canSendMessages = false;
+      }
+
+      const type = d.isGroup ? 'group' : (isBroadcast || d.isChannel) ? 'channel' : d.isUser ? 'private' : (entity.title ? 'group' : 'private');
       const isGroupOrChannel = type === 'group' || type === 'channel';
       const title = isGroupOrChannel
-        ? (d.title || d.entity?.title || d.name || (d.entity?.username ? `@${d.entity.username}` : (type === 'channel' ? 'قناة تليجرام' : 'مجموعة تليجرام')))
-        : (d.name || d.title || d.entity?.title || (d.entity?.firstName ? `${d.entity?.firstName || ''} ${d.entity?.lastName || ''}`.trim() : (d.entity?.username ? `@${d.entity.username}` : 'محادثة تليجرام')));
-      const username = d.entity?.username ? `@${d.entity.username}` : undefined;
+        ? (d.title || entity.title || d.name || (entity.username ? `@${entity.username}` : (type === 'channel' ? 'قناة تليجرام' : 'مجموعة تليجرام')))
+        : (d.name || d.title || entity.title || (entity.firstName ? `${entity.firstName || ''} ${entity.lastName || ''}`.trim() : (entity.username ? `@${entity.username}` : 'محادثة تليجرام')));
+      const username = entity.username ? `@${entity.username}` : undefined;
+
+      const slowmodeSeconds = entity.slowmodeSeconds || entity.slowmode_seconds || 0;
+      const slowmodeNextSendDate = entity.slowmodeNextSendDate || entity.slowmode_next_send_date || 0;
 
       let lastMsgText = d.message?.message || '';
       if (!lastMsgText && d.message?.media) {
@@ -355,9 +399,32 @@ export async function fetchDialogsSafe(client: TelegramClient): Promise<any[]> {
         is_muted: false,
         is_archived: !!d.archived,
         is_broadcast: isBroadcast,
+        is_announcement_only: isBroadcast || (isDefaultRestrictedFromSending && !isAdmin),
         is_creator: isCreator,
         is_admin: isAdmin,
+        is_forbidden: isForbidden,
+        forbidden_reason: forbiddenReason,
+        is_restricted: isRestricted,
+        is_banned: isBanned,
+        is_kicked: isKicked,
         can_send_messages: canSendMessages,
+        restriction_reason: restrictionReason,
+        banned_rights: bannedRights ? {
+          send_messages: !bannedRights.sendMessages && !bannedRights.send_messages,
+          send_media: !bannedRights.sendMedia && !bannedRights.send_media,
+          send_stickers: !bannedRights.sendStickers && !bannedRights.send_stickers,
+          embed_links: !bannedRights.embedLinks && !bannedRights.embed_links,
+          send_polls: !bannedRights.sendPolls && !bannedRights.send_polls,
+          until_date: bannedRights.untilDate || bannedRights.until_date || 0,
+        } : undefined,
+        default_banned_rights: defaultBannedRights ? {
+          send_messages: !defaultBannedRights.sendMessages && !defaultBannedRights.send_messages,
+          send_media: !defaultBannedRights.sendMedia && !defaultBannedRights.send_media,
+          embed_links: !defaultBannedRights.embedLinks && !defaultBannedRights.embed_links,
+          send_polls: !defaultBannedRights.sendPolls && !defaultBannedRights.send_polls,
+        } : undefined,
+        slowmode_seconds: slowmodeSeconds,
+        slowmode_next_send_date: slowmodeNextSendDate,
         last_msg: lastMsgText,
         lastMsg: lastMsgText,
         lastMsgDate: lastMsgDate,

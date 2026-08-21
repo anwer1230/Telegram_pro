@@ -125,6 +125,41 @@ export interface Message {
   };
 }
 
+export interface RestrictionReason {
+  platform: string;
+  reason: string;
+  text: string;
+}
+
+export interface ChatBannedRights {
+  view_messages?: boolean;
+  send_messages?: boolean;
+  send_media?: boolean;
+  send_stickers?: boolean;
+  send_gifs?: boolean;
+  send_games?: boolean;
+  send_inline?: boolean;
+  embed_links?: boolean;
+  send_polls?: boolean;
+  change_info?: boolean;
+  invite_users?: boolean;
+  pin_messages?: boolean;
+  until_date?: number;
+}
+
+export interface ChatAdminRights {
+  change_info?: boolean;
+  post_messages?: boolean;
+  edit_messages?: boolean;
+  delete_messages?: boolean;
+  ban_users?: boolean;
+  invite_users?: boolean;
+  pin_messages?: boolean;
+  add_admins?: boolean;
+  anonymous?: boolean;
+  manage_call?: boolean;
+}
+
 export interface Chat {
   id: string | number;
   type: ChatType;
@@ -156,8 +191,21 @@ export interface Chat {
   typing_user?: string | null;
   can_send_messages?: boolean;
   is_broadcast?: boolean;
+  is_announcement_only?: boolean;
   is_admin?: boolean;
   is_creator?: boolean;
+  is_forbidden?: boolean;
+  forbidden_reason?: string;
+  is_restricted?: boolean;
+  is_banned?: boolean;
+  is_kicked?: boolean;
+  is_member?: boolean;
+  restriction_reason?: RestrictionReason[];
+  banned_rights?: ChatBannedRights;
+  default_banned_rights?: ChatBannedRights;
+  admin_rights?: ChatAdminRights;
+  slowmode_seconds?: number;
+  slowmode_next_send_date?: number;
   last_system_activity?: number;
   has_system_activity?: boolean;
   last_active_type?: string;

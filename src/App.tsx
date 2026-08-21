@@ -114,6 +114,33 @@ interface ChatItem {
   phone?: string;
   last_system_activity?: number;
   has_system_activity?: boolean;
+  is_forbidden?: boolean;
+  forbidden_reason?: string;
+  is_restricted?: boolean;
+  is_banned?: boolean;
+  is_kicked?: boolean;
+  can_send_messages?: boolean;
+  is_broadcast?: boolean;
+  is_announcement_only?: boolean;
+  is_admin?: boolean;
+  is_creator?: boolean;
+  restriction_reason?: Array<{ platform: string; reason: string; text: string }>;
+  banned_rights?: {
+    send_messages?: boolean;
+    send_media?: boolean;
+    send_stickers?: boolean;
+    embed_links?: boolean;
+    send_polls?: boolean;
+    until_date?: number;
+  };
+  default_banned_rights?: {
+    send_messages?: boolean;
+    send_media?: boolean;
+    embed_links?: boolean;
+    send_polls?: boolean;
+  };
+  slowmode_seconds?: number;
+  slowmode_next_send_date?: number;
 }
 
 interface UserProfileData {
@@ -711,6 +738,9 @@ export default function App() {
 
   // Official In-App Telegram Link & Group Join Modal
   const [telegramLinkModalUrl, setTelegramLinkModalUrl] = useState<string | null>(null);
+
+  // Telegram Official Chat Restriction & Forbidden Info Modal
+  const [forbiddenModalChat, setForbiddenModalChat] = useState<ChatItem | null>(null);
 
   // Peer Avatar Cache for GramJS Profile Photos
   const [avatarMap, setAvatarMap] = useState<Record<string, string>>({});
@@ -4551,13 +4581,43 @@ export default function App() {
                   </div>
 
                   <div className="hdr-info" onClick={() => currentChat && openProfile(currentChat)}>
-                    <div className="hdr-title">{activeDisplayName || (lang === 'ar' ? 'محادثة' : 'Chat')}</div>
+                    <div className="hdr-title flex items-center gap-2">
+                      <span>{activeDisplayName || (lang === 'ar' ? 'محادثة' : 'Chat')}</span>
+                      {currentChat?.is_forbidden ? (
+                        <span
+                          className="bg-red-500/20 text-red-400 text-xs px-2 py-0.5 rounded-full flex items-center gap-1 cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setForbiddenModalChat(currentChat);
+                          }}
+                        >
+                          <i className="fas fa-lock text-[10px]" />
+                          <span>{lang === 'ar' ? 'مغلقة' : 'Closed'}</span>
+                        </span>
+                      ) : currentChat?.is_banned || currentChat?.is_kicked ? (
+                        <span className="bg-red-500/20 text-red-400 text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <i className="fas fa-ban text-[10px]" />
+                          <span>{lang === 'ar' ? 'محظور' : 'Banned'}</span>
+                        </span>
+                      ) : currentChat?.is_restricted || (currentChat?.banned_rights && currentChat.banned_rights.send_messages === false) ? (
+                        <span className="bg-amber-500/20 text-amber-400 text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <i className="fas fa-user-lock text-[10px]" />
+                          <span>{lang === 'ar' ? 'مقيد' : 'Restricted'}</span>
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="hdr-sub">
                       {partnerTyping ? (
                         <span style={{ color: 'var(--tg-blue)' }}>{lang === 'ar' ? 'يكتب الآن...' : 'typing...'}</span>
+                      ) : currentChat?.is_forbidden ? (
+                        <span style={{ color: '#ef4444' }}>{currentChat.forbidden_reason || (lang === 'ar' ? 'المحادثة مغلقة أو مقيدة' : 'Chat Closed')}</span>
+                      ) : currentChat?.is_banned || currentChat?.is_kicked ? (
+                        <span style={{ color: '#ef4444' }}>{lang === 'ar' ? 'أنت محظور من هذه المجموعة' : 'You are banned'}</span>
+                      ) : currentChat?.is_restricted || (currentChat?.banned_rights && currentChat.banned_rights.send_messages === false) ? (
+                        <span style={{ color: '#f59e0b' }}>{lang === 'ar' ? 'تم تقييدك من الكتابة' : 'Restricted from sending'}</span>
                       ) : currentChat?.type === 'channel' ? (
                         lang === 'ar' ? 'قناة عامة' : 'channel'
-                      ) : currentChat?.type === 'group' ? (
+                      ) : currentChat?.type === 'group' || currentChat?.type === 'supergroup' ? (
                         lang === 'ar' ? 'مجموعة تليجرام' : 'group'
                       ) : (
                         lang === 'ar' ? 'متصل الآن' : 'online'
@@ -5065,109 +5125,196 @@ export default function App() {
               </div>
             )}
 
-            {/* Input Bar */}
-            <div className="input-bar">
-              {/* Voice Recording Active Bar */}
-              {isRecordingVoice ? (
-                <div className="voice-recording-bar">
-                  <div className="rec-dot" />
-                  <span className="rec-timer">{fmtDuration(voiceDuration)}</span>
-                  <div className="rec-wave">
-                    {[20, 50, 80, 40, 70, 90, 60, 30, 80, 50].map((h, i) => (
-                      <div
-                        key={i}
-                        className="voice-bar pulse"
-                        style={{ height: `${h}%`, background: '#ff6b6b' }}
-                      />
-                    ))}
-                  </div>
-                  <button className="cancel-rec-btn" onClick={cancelVoiceRecording}>
-                    <i className="fas fa-trash" />
-                  </button>
-                  <button className="stop-rec-btn" onClick={stopVoiceRecording}>
-                    <i className="fas fa-paper-plane" />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {/* Telegram Style Message Input Capsule */}
-                  <div className="input-wrap">
-                    {/* Emoji / Smile Button */}
-                    <button
-                      className="capsule-btn emoji-btn"
-                      onClick={() => setEmojiPickerOpen(!emojiPickerOpen)}
-                      title={lang === 'ar' ? 'رموز تعبيرية' : 'Emoji'}
-                    >
-                      <i className="far fa-smile" />
-                    </button>
+            {/* Input Bar or Official Telegram Restriction / Channel Action Bar */}
+            {(() => {
+              const isForbidden = !!currentChat?.is_forbidden || (currentChat?.restriction_reason && currentChat.restriction_reason.length > 0);
+              const isBannedOrKicked = !!currentChat?.is_banned || !!currentChat?.is_kicked;
+              const isRestrictedFromWriting = !!currentChat?.is_restricted || (currentChat?.banned_rights && currentChat.banned_rights.send_messages === false);
+              const isChannelOrAnnouncement = (currentChat?.type === 'channel' || currentChat?.is_broadcast || currentChat?.is_announcement_only) && !currentChat?.is_admin && !currentChat?.is_creator;
 
-                    {/* Text Input Area */}
-                    <textarea
-                      ref={inputRef}
-                      className="msg-input"
-                      placeholder={lang === 'ar' ? 'اكتب رسالة...' : 'Write a message...'}
-                      value={inputText}
-                      rows={1}
-                      onChange={(e) => handleDraftChange(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          sendMessage();
-                        }
-                      }}
-                    />
-
-                    {/* Attach Button & Menu inside capsule */}
-                    <div className="attach-wrap">
-                      <button
-                        className="capsule-btn attach-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setAttachMenuOpen(!attachMenuOpen);
-                        }}
-                        title={lang === 'ar' ? 'إرفاق ملف' : 'Attach'}
-                      >
-                        <i className="fas fa-paperclip" />
+              if (isForbidden) {
+                return (
+                  <div className="chat-locked-status-bar danger">
+                    <i className="fas fa-lock" />
+                    <div className="status-text-wrap">
+                      <span className="status-title">{lang === 'ar' ? 'المجموعة مغلقة أو غير متوفرة' : 'Chat Unavailable / Closed'}</span>
+                      <span className="status-desc">
+                        {currentChat?.forbidden_reason || (lang === 'ar' ? 'تم إغلاق هذه المحادثة على خوادم تليجرام.' : 'This chat is closed on Telegram.')}
+                      </span>
+                    </div>
+                    {currentChat?.restriction_reason && currentChat.restriction_reason.length > 0 && (
+                      <button className="status-action-btn" onClick={() => setForbiddenModalChat(currentChat)}>
+                        {lang === 'ar' ? 'السبب' : 'Reason'}
                       </button>
+                    )}
+                  </div>
+                );
+              }
 
-                      {attachMenuOpen && (
-                        <div className="attach-menu show" onClick={(e) => e.stopPropagation()}>
-                          <div
-                            className="attach-item"
-                            onClick={() => imgInputRef.current?.click()}
-                          >
-                            <i className="fas fa-image" style={{ color: '#2481cc' }} />
-                            <span>{lang === 'ar' ? 'صورة أو فيديو' : 'Photo or Video'}</span>
-                          </div>
-                          <div
-                            className="attach-item"
-                            onClick={() => fileInputRef.current?.click()}
-                          >
-                            <i className="fas fa-file" style={{ color: '#27ae60' }} />
-                            <span>{lang === 'ar' ? 'مستند أو ملف' : 'File / Document'}</span>
-                          </div>
-                        </div>
-                      )}
+              if (isBannedOrKicked) {
+                return (
+                  <div className="chat-locked-status-bar danger">
+                    <i className="fas fa-ban" />
+                    <div className="status-text-wrap">
+                      <span className="status-title">{lang === 'ar' ? 'أنت محظور من هذه المجموعة' : 'You are banned from this group'}</span>
+                      <span className="status-desc">{lang === 'ar' ? 'تمت إزالتك من قبل المشرفين ولا يمكنك إرسال الرسائل.' : 'You have been restricted by admins.'}</span>
                     </div>
                   </div>
+                );
+              }
 
-                  {/* Send or Voice Button (Round FAB) */}
-                  {inputText.trim() || pendingAttachments.length > 0 ? (
-                    <button className="send-btn" onClick={sendMessage} title={lang === 'ar' ? 'إرسال' : 'Send'}>
-                      <i className="fas fa-paper-plane" />
-                    </button>
-                  ) : (
+              if (isRestrictedFromWriting) {
+                const untilDate = currentChat?.banned_rights?.until_date;
+                const expiryStr = untilDate && untilDate > 0
+                  ? (lang === 'ar' ? `ينتهي التقييد في: ${new Date(untilDate * 1000).toLocaleString('ar-EG')}` : `Expires: ${new Date(untilDate * 1000).toLocaleString()}`)
+                  : (lang === 'ar' ? 'تم تقييدك من الكتابة بواسطة المشرفين.' : 'You were restricted from writing by admins.');
+                return (
+                  <div className="chat-locked-status-bar warning">
+                    <i className="fas fa-user-lock" />
+                    <div className="status-text-wrap">
+                      <span className="status-title">{lang === 'ar' ? 'تم تقييدك من إرسال الرسائل' : 'You are restricted from sending messages'}</span>
+                      <span className="status-desc">{expiryStr}</span>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (isChannelOrAnnouncement) {
+                return (
+                  <div className="chat-channel-action-bar">
+                    <div className="channel-bar-info">
+                      <i className="fas fa-bullhorn" />
+                      <span>{lang === 'ar' ? 'يمكن للمشرفين فقط النشر في هذه القناة' : 'Only admins can post in this channel'}</span>
+                    </div>
                     <button
-                      className="mic-btn send-btn"
-                      onClick={startVoiceRecording}
-                      title={lang === 'ar' ? 'تسجيل رسالة صوتية' : 'Record voice'}
+                      className="channel-mute-toggle-btn"
+                      onClick={() => {
+                        if (currentChatId) {
+                          setChats(prev => prev.map(c => String(c.id) === String(currentChatId) ? { ...c, muted: !c.muted } : c));
+                          showToast(currentChat?.muted ? (lang === 'ar' ? 'تم تفعيل التنبيهات' : 'Unmuted') : (lang === 'ar' ? 'تم كتم القناة' : 'Muted'));
+                        }
+                      }}
                     >
-                      <i className="fas fa-microphone" />
+                      <i className={`fas ${currentChat?.muted ? 'fa-bell-slash' : 'fa-bell'}`} />
+                      <span>{currentChat?.muted ? (lang === 'ar' ? 'إلغاء الكتم' : 'Unmute') : (lang === 'ar' ? 'كتم الإشعارات' : 'Mute')}</span>
                     </button>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="input-bar">
+                  {/* Voice Recording Active Bar */}
+                  {isRecordingVoice ? (
+                    <div className="voice-recording-bar">
+                      <div className="rec-dot" />
+                      <span className="rec-timer">{fmtDuration(voiceDuration)}</span>
+                      <div className="rec-wave">
+                        {[20, 50, 80, 40, 70, 90, 60, 30, 80, 50].map((h, i) => (
+                          <div
+                            key={i}
+                            className="voice-bar pulse"
+                            style={{ height: `${h}%`, background: '#ff6b6b' }}
+                          />
+                        ))}
+                      </div>
+                      <button className="cancel-rec-btn" onClick={cancelVoiceRecording}>
+                        <i className="fas fa-trash" />
+                      </button>
+                      <button className="stop-rec-btn" onClick={stopVoiceRecording}>
+                        <i className="fas fa-paper-plane" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Telegram Style Message Input Capsule */}
+                      <div className="input-wrap">
+                        {/* Emoji / Smile Button */}
+                        <button
+                          className="capsule-btn emoji-btn"
+                          onClick={() => setEmojiPickerOpen(!emojiPickerOpen)}
+                          title={lang === 'ar' ? 'رموز تعبيرية' : 'Emoji'}
+                        >
+                          <i className="far fa-smile" />
+                        </button>
+
+                        {/* Slow mode indicator if active */}
+                        {currentChat?.slowmode_seconds && currentChat.slowmode_seconds > 0 ? (
+                          <div className="slowmode-timer-pill" title={lang === 'ar' ? `الوضع البطيء مفعّل (${currentChat.slowmode_seconds} ثانية)` : `Slow mode (${currentChat.slowmode_seconds}s)`}>
+                            <i className="fas fa-hourglass-half" />
+                            <span>{currentChat.slowmode_seconds}s</span>
+                          </div>
+                        ) : null}
+
+                        {/* Text Input Area */}
+                        <textarea
+                          ref={inputRef}
+                          className="msg-input"
+                          placeholder={lang === 'ar' ? 'اكتب رسالة...' : 'Write a message...'}
+                          value={inputText}
+                          rows={1}
+                          onChange={(e) => handleDraftChange(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              sendMessage();
+                            }
+                          }}
+                        />
+
+                        {/* Attach Button & Menu inside capsule */}
+                        <div className="attach-wrap">
+                          <button
+                            className="capsule-btn attach-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setAttachMenuOpen(!attachMenuOpen);
+                            }}
+                            title={lang === 'ar' ? 'إرفاق ملف' : 'Attach'}
+                          >
+                            <i className="fas fa-paperclip" />
+                          </button>
+
+                          {attachMenuOpen && (
+                            <div className="attach-menu show" onClick={(e) => e.stopPropagation()}>
+                              <div
+                                className="attach-item"
+                                onClick={() => imgInputRef.current?.click()}
+                              >
+                                <i className="fas fa-image" style={{ color: '#2481cc' }} />
+                                <span>{lang === 'ar' ? 'صورة أو فيديو' : 'Photo or Video'}</span>
+                              </div>
+                              <div
+                                className="attach-item"
+                                onClick={() => fileInputRef.current?.click()}
+                              >
+                                <i className="fas fa-file" style={{ color: '#27ae60' }} />
+                                <span>{lang === 'ar' ? 'مستند أو ملف' : 'File / Document'}</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Send or Voice Button (Round FAB) */}
+                      {inputText.trim() || pendingAttachments.length > 0 ? (
+                        <button className="send-btn" onClick={sendMessage} title={lang === 'ar' ? 'إرسال' : 'Send'}>
+                          <i className="fas fa-paper-plane" />
+                        </button>
+                      ) : (
+                        <button
+                          className="mic-btn send-btn"
+                          onClick={startVoiceRecording}
+                          title={lang === 'ar' ? 'تسجيل رسالة صوتية' : 'Record voice'}
+                        >
+                          <i className="fas fa-microphone" />
+                        </button>
+                      )}
+                    </>
                   )}
-                </>
-              )}
-            </div>
+                </div>
+              );
+            })()}
 
             {/* Emoji Picker Popup */}
             {emojiPickerOpen && (
@@ -5501,6 +5648,48 @@ export default function App() {
         }}
         lang={lang}
       />
+      {/* ══ TELEGRAM CHAT RESTRICTION & FORBIDDEN MODAL ══ */}
+      {forbiddenModalChat && (
+        <div className="modal-overlay show" onClick={() => setForbiddenModalChat(null)}>
+          <div className="chat-forbidden-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-icon">
+              <i className="fas fa-exclamation-triangle" />
+            </div>
+            <h3 className="modal-title">
+              {forbiddenModalChat.title || forbiddenModalChat.name || (lang === 'ar' ? 'محادثة مقيدة' : 'Restricted Chat')}
+            </h3>
+            <div className="modal-body">
+              {forbiddenModalChat.restriction_reason && forbiddenModalChat.restriction_reason.length > 0 ? (
+                <div>
+                  <p style={{ fontWeight: 600, color: '#ef4444', marginBottom: 6 }}>
+                    {lang === 'ar' ? '⚠️ سبب التقييد من خوادم تليجرام:' : '⚠️ Telegram Server Restriction Reason:'}
+                  </p>
+                  {forbiddenModalChat.restriction_reason.map((r, idx) => (
+                    <div key={idx} style={{ marginBottom: 4 }}>
+                      • {r.text || r.reason}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p>
+                  {forbiddenModalChat.forbidden_reason || (lang === 'ar'
+                    ? 'هذه المجموعة أو القناة مغلقة أو محظورة على خوادم تليجرام، أو تمت إزالتك منها.'
+                    : 'This chat is closed, forbidden on Telegram servers, or you have been removed.')}
+                </p>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn-confirm"
+                onClick={() => setForbiddenModalChat(null)}
+              >
+                {lang === 'ar' ? 'حسناً، فهمت' : 'OK, Got It'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ══ TELEGRAM DIRECT APK & APP INSTALLER MODAL ══ */}
       <TelegramApkInstallModal
         isOpen={apkInstallModalOpen}

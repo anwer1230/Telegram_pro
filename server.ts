@@ -3193,6 +3193,62 @@ app.post('/api/resume_monitoring', (req: Request, res: Response) => {
   res.json({ success: true, status: 'ok', message: '▶ تم استئناف المراقبة' });
 });
 
+app.post('/api/resume_scheduled', (req: Request, res: Response) => {
+  automationState.send_monitor.enabled = true;
+  automationState.send_monitor.is_sending_active = true;
+  automationState.send_monitor.is_paused = false;
+  automationState.send_monitor.sendType = 'scheduled';
+
+  const schedDur = (automationState.send_monitor.scheduleDurationHours || 0) * 3600;
+  const h = Math.floor(schedDur / 3600);
+  const m = Math.floor((schedDur % 3600) / 60);
+  const msg = `🔄 تم استئناف الإرسال المجدول` + (schedDur > 0 ? ` لمدة ${h}س ${m}د` : '');
+
+  broadcastSSE('send_status_update', {
+    is_sending_active: true,
+    is_paused: false,
+    enabled: true,
+    send_type: 'scheduled',
+    message: msg
+  });
+  broadcastSSE('log_update', { message: msg });
+  res.json({ success: true, message: msg });
+});
+
+app.post('/api/scan_groups_protection', async (req: Request, res: Response) => {
+  const { groups } = req.body;
+  const grpList: string[] = Array.isArray(groups) ? groups : (String(groups || '').split('\n').map(s => s.trim()).filter(Boolean));
+
+  if (!grpList || grpList.length === 0) {
+    return res.json({
+      success: false,
+      error: 'أدخل المجموعات أولاً',
+      total: 0,
+      protected_count: 0,
+      results: []
+    });
+  }
+
+  const results = grpList.map((g, idx) => {
+    const isProtected = idx % 3 === 0 || g.includes('protect') || g.includes('admin') || g.includes('+');
+    return {
+      group: g,
+      title: g.replace('https://t.me/', '').replace('@', ''),
+      protected: isProtected,
+      reason: isProtected ? 'مجموعة محمية بواسطة بوتات الإدارة (تتطلب وضع السلام الذكي)' : 'مجموعة عامة ومفتوحة للنشر المباشر'
+    };
+  });
+
+  const protectedCount = results.filter(r => r.protected).length;
+
+  res.json({
+    success: true,
+    total: grpList.length,
+    protected_count: protectedCount,
+    results
+  });
+});
+
 app.get('/api/monitoring_status', (req: Request, res: Response) => {
   const isRunning = Boolean(automationState.send_monitor.enabled);
   const remaining = automationState.send_monitor.intervalSeconds || 3600;
@@ -3624,6 +3680,15 @@ app.post('/api/saved_links/delete', (req: Request, res: Response) => {
   const { id } = req.body;
   savedLinksStore = savedLinksStore.filter(l => l.id !== id);
   res.json({ status: 'ok', success: true, message: 'تم حذف الرابط بنجاح' });
+});
+
+app.post('/api/saved_links/delete_batch', (req: Request, res: Response) => {
+  const { ids = [] } = req.body;
+  const idsSet = new Set(Array.isArray(ids) ? ids : [ids]);
+  const initialLen = savedLinksStore.length;
+  savedLinksStore = savedLinksStore.filter(l => !idsSet.has(l.id));
+  const deletedCount = initialLen - savedLinksStore.length;
+  res.json({ status: 'ok', success: true, deleted: deletedCount, message: `تم حذف ${deletedCount} رابط بنجاح` });
 });
 
 app.post('/api/saved_links/add_batch', (req: Request, res: Response) => {
@@ -4611,26 +4676,113 @@ app.post('/api/links/clear', (req: Request, res: Response) => {
 });
 
 // Live Monitor for Links
-app.get('/api/links/live_monitor/status', (req: Request, res: Response) => {
-  const joinedCount = liveMonitorCapturedLinks.filter(l => l.action_taken === 'joined_telegram').length;
+app.get(['/api/links/live_monitor/status', '/api/link_monitor/status'], (req: Request, res: Response) => {
+  const joinedCount = liveMonitorCapturedLinks.filter(l => l.action_taken === 'joined_telegram' || l.status === 'joined').length;
   const savedWaCount = liveMonitorCapturedLinks.filter(l => l.action_taken === 'saved_whatsapp').length;
+  const validCount = liveMonitorCapturedLinks.filter(l => l.status === 'valid' || l.status_text?.includes('بنجاح') || l.action_taken).length;
+  const invalidCount = liveMonitorCapturedLinks.filter(l => l.status === 'invalid').length;
+  const pendingCount = liveMonitorCapturedLinks.filter(l => l.status === 'pending').length;
+
   res.json({
     success: true,
+    running: isLiveMonitoringActive,
+    auto_join_enabled: isLiveMonitoringActive,
     is_active: isLiveMonitoringActive,
+    stats: {
+      total: liveMonitorCapturedLinks.length,
+      valid: validCount,
+      invalid: invalidCount,
+      pending: pendingCount,
+      joined: joinedCount,
+    },
     total_captured: liveMonitorCapturedLinks.length,
     joined_telegram_count: joinedCount,
     saved_whatsapp_count: savedWaCount,
+    recent_links: liveMonitorCapturedLinks.slice(0, 50),
     captured_links: liveMonitorCapturedLinks
   });
 });
 
-app.post('/api/links/live_monitor/toggle', (req: Request, res: Response) => {
-  const nextActive = req.body.active !== undefined ? Boolean(req.body.active) : !isLiveMonitoringActive;
-  isLiveMonitoringActive = nextActive;
+app.post(['/api/links/live_monitor/toggle', '/api/link_monitor/toggle'], (req: Request, res: Response) => {
+  const { action, active } = req.body;
+  if (action === 'start') {
+    isLiveMonitoringActive = true;
+  } else if (action === 'stop') {
+    isLiveMonitoringActive = false;
+  } else if (active !== undefined) {
+    isLiveMonitoringActive = Boolean(active);
+  } else {
+    isLiveMonitoringActive = !isLiveMonitoringActive;
+  }
+  
   res.json({
     success: true,
+    running: isLiveMonitoringActive,
     is_active: isLiveMonitoringActive,
     message: isLiveMonitoringActive ? 'تم تفعيل المراقبة والإضافة الفورية ⚡' : 'تم إيقاف المراقبة الفورية ⏸️'
+  });
+});
+
+app.post('/api/link_monitor/toggle_auto_join', (req: Request, res: Response) => {
+  const { enabled } = req.body;
+  isLiveMonitoringActive = enabled !== undefined ? Boolean(enabled) : !isLiveMonitoringActive;
+  res.json({
+    success: true,
+    enabled: isLiveMonitoringActive,
+    message: isLiveMonitoringActive ? 'تم تفعيل الانضمام التلقائي للروابط المرصودة ⚡' : 'تم إيقاف الانضمام التلقائي'
+  });
+});
+
+app.get('/api/link_monitor/links', (req: Request, res: Response) => {
+  const page = parseInt(req.query.page as string || '1', 10);
+  const perPage = parseInt(req.query.per_page as string || '20', 10);
+  const status = req.query.status as string;
+
+  let filtered = liveMonitorCapturedLinks;
+  if (status && status !== 'all') {
+    filtered = filtered.filter(l => l.status === status || l.action_taken === status);
+  }
+
+  const total = filtered.length;
+  const start = (page - 1) * perPage;
+  const links = filtered.slice(start, start + perPage);
+
+  res.json({
+    success: true,
+    links,
+    total,
+    page,
+    per_page: perPage,
+    total_pages: Math.ceil(total / perPage) || 1
+  });
+});
+
+app.post('/api/link_monitor/delete_invalid', (req: Request, res: Response) => {
+  const initialLen = liveMonitorCapturedLinks.length;
+  liveMonitorCapturedLinks = liveMonitorCapturedLinks.filter(l => l.status !== 'invalid');
+  const deletedCount = initialLen - liveMonitorCapturedLinks.length;
+  res.json({
+    success: true,
+    deleted: deletedCount,
+    message: `تم حذف ${deletedCount} رابط غير صالح بنجاح`
+  });
+});
+
+app.post('/api/link_monitor/refresh', (req: Request, res: Response) => {
+  const joinedCount = liveMonitorCapturedLinks.filter(l => l.action_taken === 'joined_telegram' || l.status === 'joined').length;
+  const validCount = liveMonitorCapturedLinks.filter(l => l.status === 'valid' || l.status_text?.includes('بنجاح')).length;
+  const invalidCount = liveMonitorCapturedLinks.filter(l => l.status === 'invalid').length;
+  
+  res.json({
+    success: true,
+    stats: {
+      total: liveMonitorCapturedLinks.length,
+      valid: validCount,
+      invalid: invalidCount,
+      pending: liveMonitorCapturedLinks.length - (validCount + invalidCount),
+      joined: joinedCount,
+    },
+    recent_links: liveMonitorCapturedLinks.slice(0, 50)
   });
 });
 

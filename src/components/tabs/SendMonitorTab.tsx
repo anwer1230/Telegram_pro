@@ -26,6 +26,18 @@ export const SendMonitorTab: React.FC<SendMonitorTabProps> = ({
   const [selectedOption, setSelectedOption] = useState<'salam' | 'skip' | 'smart' | 'always' | 'off'>('salam');
   const [uploadedImages, setUploadedImages] = useState<Array<{ name: string; data: string; type: string }>>([]);
   const [isSending, setIsSending] = useState(false);
+  const [isScanningGroups, setIsScanningGroups] = useState(false);
+  const [scanGroupsResult, setScanGroupsResult] = useState<{
+    total: number;
+    protected_count: number;
+    results: Array<{ group: string; title?: string; protected: boolean; reason?: string }>;
+  } | null>(null);
+  const [scheduleStatus, setScheduleStatus] = useState<{
+    active: boolean;
+    stopped_auto?: boolean;
+    text?: string;
+    countdown?: string;
+  }>({ active: false });
   const [isSendingActive, setIsSendingActive] = useState<boolean>(() => {
     return localStorage.getItem('tg_send_mon_active') === 'true';
   });
@@ -382,6 +394,54 @@ export const SendMonitorTab: React.FC<SendMonitorTabProps> = ({
     }
   };
 
+  const scanGroupsProtection = async () => {
+    const grps = groupsInput.trim();
+    if (!grps) {
+      addLog('⚠️ أدخل المجموعات أولاً في حقل "المجموعات"');
+      return;
+    }
+
+    setIsScanningGroups(true);
+    setScanGroupsResult(null);
+    addLog('🔍 جاري فحص المجموعات وكشف المحمية...');
+
+    try {
+      const res = await fetch('/api/scan_groups_protection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groups: grps }),
+      });
+      const data = await res.json();
+      if (data.results) {
+        setScanGroupsResult(data);
+        addLog(`🔍 نتيجة الفحص: ${data.protected_count} محمية من أصل ${data.total}`);
+      } else {
+        addLog('❌ خطأ في الفحص: ' + (data.error || 'فشل الاستجابة'));
+      }
+    } catch (err: any) {
+      addLog('❌ خطأ في الفحص: ' + err.message);
+    } finally {
+      setIsScanningGroups(false);
+    }
+  };
+
+  const resumeSchedule = async () => {
+    try {
+      addLog('⏳ جاري استئناف الإرسال المجدول...');
+      const res = await fetch('/api/resume_scheduled', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setIsMonitoring(true);
+        setScheduleStatus({ active: true, text: '🟢 الإرسال المجدول يعمل بنشاط' });
+        addLog('✅ تم استئناف الإرسال المجدول بنجاح');
+      } else {
+        addLog('❌ فشل الاستئناف: ' + (data.message || 'خطأ'));
+      }
+    } catch (err: any) {
+      addLog('❌ خطأ: ' + err.message);
+    }
+  };
+
   const stopScheduledSend = () => {
     if (window.confirm('⚠️ إيقاف الإرسال المجدول فوراً؟')) {
       stopMonitoring();
@@ -536,6 +596,41 @@ export const SendMonitorTab: React.FC<SendMonitorTabProps> = ({
                 placeholder="ضع روابط المجموعات (https://t.me/group أو t.me/+invite أو @username) أو أسماء المجموعات (كل مجموعة في سطر)..."
                 className="w-full p-3 rounded-xl border border-zinc-700/80 bg-zinc-950 text-zinc-100 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all disabled:opacity-50 disabled:bg-zinc-900/40 placeholder:text-zinc-500"
               />
+
+              {/* زر فحص المجموعات وكشف المحمية */}
+              <div className="mt-3">
+                <button
+                  type="button"
+                  id="scanGroupsBtn"
+                  onClick={scanGroupsProtection}
+                  disabled={isScanningGroups}
+                  className="w-full py-2.5 px-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+                >
+                  <i className={`fas ${isScanningGroups ? 'fa-spinner fa-spin' : 'fa-search-plus'}`} />
+                  <span>{isScanningGroups ? 'جاري فحص المجموعات...' : 'فحص المجموعات (كشف المحمية منها) 🔍'}</span>
+                </button>
+
+                {scanGroupsResult && (
+                  <div className="mt-2 p-3 bg-zinc-950 rounded-xl border border-zinc-800 text-xs space-y-1.5 max-h-48 overflow-y-auto font-mono">
+                    <div className="font-bold text-amber-400 pb-1 border-b border-zinc-800 flex justify-between items-center">
+                      <span>🔍 نتيجة الفحص: {scanGroupsResult.protected_count} محمية من أصل {scanGroupsResult.total}</span>
+                      <button
+                        onClick={() => setScanGroupsResult(null)}
+                        className="text-zinc-500 hover:text-zinc-300 text-[10px]"
+                      >
+                        ✕ إغلاق
+                      </button>
+                    </div>
+                    {scanGroupsResult.results.map((item, idx) => (
+                      <div key={idx} className={`py-1 border-b border-zinc-900/50 flex items-start gap-1.5 ${item.protected ? 'text-rose-400' : 'text-emerald-400'}`}>
+                        <span>{item.protected ? '🔴' : '🟢'}</span>
+                        <span className="font-semibold text-zinc-200">{item.title || item.group}</span>
+                        {item.reason && <span className="text-zinc-500 text-[10px]">({item.reason})</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -790,6 +885,33 @@ export const SendMonitorTab: React.FC<SendMonitorTabProps> = ({
                 >
                   <i className="fas fa-stop text-sm" />
                   <span>إيقاف كلي ⏹️</span>
+                </button>
+              </div>
+
+              {/* شريط حالة استئناف الإرسال المجدول (scheduleStatusBar) */}
+              <div
+                id="scheduleStatusBar"
+                className="rounded-xl p-3 bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-2 flex-wrap"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">⏱️</span>
+                  <div>
+                    <div className="text-xs font-bold text-amber-400">
+                      {isMonitoring ? 'الإرسال المجدول يعمل بنشاط' : 'الإرسال المجدول: متوقف'}
+                    </div>
+                    <div className="text-[10px] text-zinc-400">
+                      {scheduleDuration > 0 ? `المدة المحددة: ${scheduleDuration} ساعة` : 'يعمل بدون حد زمني أقصى'}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  id="resumeScheduleBtn"
+                  type="button"
+                  onClick={resumeSchedule}
+                  className="py-1.5 px-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow"
+                >
+                  <i className="fas fa-redo text-xs" />
+                  <span>استئناف الإرسال</span>
                 </button>
               </div>
 
