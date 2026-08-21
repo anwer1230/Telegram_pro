@@ -4472,6 +4472,33 @@ export default function App() {
                     <div className="chat-top">
                       <div className="chat-name flex items-center gap-1 min-w-0">
                         <span className="truncate">{displayName}</span>
+                        {c.is_forbidden && (
+                          <span
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold shrink-0 bg-red-500/20 text-red-400 border border-red-500/30"
+                            title={lang === 'ar' ? `المحادثة مغلقة: ${c.forbidden_reason || 'ChatForbidden'}` : 'Forbidden / Closed'}
+                          >
+                            <i className="fas fa-lock text-[8px]" />
+                            <span>{lang === 'ar' ? 'مغلقة' : 'Closed'}</span>
+                          </span>
+                        )}
+                        {(c.is_banned || c.is_kicked) && (
+                          <span
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold shrink-0 bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                            title={lang === 'ar' ? 'أنت محظور من هذه المجموعة (Banned)' : 'User Banned'}
+                          >
+                            <i className="fas fa-ban text-[8px]" />
+                            <span>{lang === 'ar' ? 'محظور' : 'Banned'}</span>
+                          </span>
+                        )}
+                        {(c.is_restricted || (c.banned_rights && c.banned_rights.send_messages === false)) && (
+                          <span
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold shrink-0 bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                            title={lang === 'ar' ? 'تم تقييد حسابك من الكتابة (Restricted)' : 'Restricted Rights'}
+                          >
+                            <i className="fas fa-user-lock text-[8px]" />
+                            <span>{lang === 'ar' ? 'مقيد' : 'Restricted'}</span>
+                          </span>
+                        )}
                         {isGroupChat(c as any) && (c.has_system_activity || (c.last_system_activity && c.last_system_activity > 0)) && (
                           <span
                             className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[10px] font-bold shrink-0"
@@ -4501,6 +4528,21 @@ export default function App() {
                           <span>
                             <span className="draft-badge">{lang === 'ar' ? 'مسودة: ' : 'Draft: '}</span>
                             {chatDraft}
+                          </span>
+                        ) : c.is_forbidden ? (
+                          <span className="text-red-400 font-medium flex items-center gap-1">
+                            <i className="fas fa-lock text-[10px]" />
+                            <span className="truncate">{c.forbidden_reason || (lang === 'ar' ? 'المحادثة مغلقة أو غير متاحة' : 'Chat closed / unavailable')}</span>
+                          </span>
+                        ) : (c.is_banned || c.is_kicked) ? (
+                          <span className="text-rose-400 font-medium flex items-center gap-1">
+                            <i className="fas fa-ban text-[10px]" />
+                            <span>{lang === 'ar' ? 'أنت محظور من هذه المجموعة' : 'You are banned from this chat'}</span>
+                          </span>
+                        ) : (c.is_restricted || (c.banned_rights && c.banned_rights.send_messages === false)) ? (
+                          <span className="text-amber-400 font-medium flex items-center gap-1">
+                            <i className="fas fa-user-lock text-[10px]" />
+                            <span>{lang === 'ar' ? 'تم تقييد حسابك من إرسال الرسائل' : 'Restricted from sending messages'}</span>
                           </span>
                         ) : (
                           <>
@@ -4585,24 +4627,39 @@ export default function App() {
                       <span>{activeDisplayName || (lang === 'ar' ? 'محادثة' : 'Chat')}</span>
                       {currentChat?.is_forbidden ? (
                         <span
-                          className="bg-red-500/20 text-red-400 text-xs px-2 py-0.5 rounded-full flex items-center gap-1 cursor-pointer"
+                          className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 text-xs px-2.5 py-0.5 rounded-full flex items-center gap-1.5 cursor-pointer transition-colors"
+                          title={lang === 'ar' ? 'انقر لعرض تفاصيل إغلاق المحادثة' : 'Click to view forbidden reason'}
                           onClick={(e) => {
                             e.stopPropagation();
                             setForbiddenModalChat(currentChat);
                           }}
                         >
                           <i className="fas fa-lock text-[10px]" />
-                          <span>{lang === 'ar' ? 'مغلقة' : 'Closed'}</span>
+                          <span>{lang === 'ar' ? 'محادثة مغلقة (Forbidden)' : 'Forbidden'}</span>
                         </span>
-                      ) : currentChat?.is_banned || currentChat?.is_kicked ? (
-                        <span className="bg-red-500/20 text-red-400 text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
+                      ) : (currentChat?.is_banned || currentChat?.is_kicked) ? (
+                        <span
+                          className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 text-xs px-2.5 py-0.5 rounded-full flex items-center gap-1.5 cursor-pointer transition-colors"
+                          title={lang === 'ar' ? 'انقر لعرض تفاصيل الحظر' : 'Click to view ban details'}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setForbiddenModalChat(currentChat);
+                          }}
+                        >
                           <i className="fas fa-ban text-[10px]" />
-                          <span>{lang === 'ar' ? 'محظور' : 'Banned'}</span>
+                          <span>{lang === 'ar' ? 'محظور من المجموعة (Banned)' : 'Banned'}</span>
                         </span>
-                      ) : currentChat?.is_restricted || (currentChat?.banned_rights && currentChat.banned_rights.send_messages === false) ? (
-                        <span className="bg-amber-500/20 text-amber-400 text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
+                      ) : (currentChat?.is_restricted || (currentChat?.banned_rights && currentChat.banned_rights.send_messages === false)) ? (
+                        <span
+                          className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 text-xs px-2.5 py-0.5 rounded-full flex items-center gap-1.5 cursor-pointer transition-colors"
+                          title={lang === 'ar' ? 'انقر لعرض تفاصيل التقييد والمدة' : 'Click to view restriction details'}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setForbiddenModalChat(currentChat);
+                          }}
+                        >
                           <i className="fas fa-user-lock text-[10px]" />
-                          <span>{lang === 'ar' ? 'مقيد' : 'Restricted'}</span>
+                          <span>{lang === 'ar' ? 'مقيد من الإرسال (Restricted)' : 'Restricted'}</span>
                         </span>
                       ) : null}
                     </div>
@@ -4610,11 +4667,24 @@ export default function App() {
                       {partnerTyping ? (
                         <span style={{ color: 'var(--tg-blue)' }}>{lang === 'ar' ? 'يكتب الآن...' : 'typing...'}</span>
                       ) : currentChat?.is_forbidden ? (
-                        <span style={{ color: '#ef4444' }}>{currentChat.forbidden_reason || (lang === 'ar' ? 'المحادثة مغلقة أو مقيدة' : 'Chat Closed')}</span>
-                      ) : currentChat?.is_banned || currentChat?.is_kicked ? (
-                        <span style={{ color: '#ef4444' }}>{lang === 'ar' ? 'أنت محظور من هذه المجموعة' : 'You are banned'}</span>
-                      ) : currentChat?.is_restricted || (currentChat?.banned_rights && currentChat.banned_rights.send_messages === false) ? (
-                        <span style={{ color: '#f59e0b' }}>{lang === 'ar' ? 'تم تقييدك من الكتابة' : 'Restricted from sending'}</span>
+                        <span className="flex items-center gap-1" style={{ color: '#ef4444' }}>
+                          <i className="fas fa-lock text-[11px]" />
+                          <span>{currentChat.forbidden_reason || (lang === 'ar' ? 'المحادثة مغلقة على خوادم تليجرام' : 'Chat closed on Telegram')}</span>
+                        </span>
+                      ) : (currentChat?.is_banned || currentChat?.is_kicked) ? (
+                        <span className="flex items-center gap-1" style={{ color: '#f43f5e' }}>
+                          <i className="fas fa-ban text-[11px]" />
+                          <span>{lang === 'ar' ? 'أنت محظور من هذه المجموعة بواسطة المشرفين' : 'You are banned by admins'}</span>
+                        </span>
+                      ) : (currentChat?.is_restricted || (currentChat?.banned_rights && currentChat.banned_rights.send_messages === false)) ? (
+                        <span className="flex items-center gap-1" style={{ color: '#f59e0b' }}>
+                          <i className="fas fa-user-lock text-[11px]" />
+                          <span>
+                            {currentChat.banned_rights?.until_date && currentChat.banned_rights.until_date > 0
+                              ? (lang === 'ar' ? `مقيد حتى ${new Date(currentChat.banned_rights.until_date * 1000).toLocaleString('ar-EG')}` : `Restricted until ${new Date(currentChat.banned_rights.until_date * 1000).toLocaleString()}`)
+                              : (lang === 'ar' ? 'تم تقييدك من إرسال الرسائل' : 'Restricted from sending')}
+                          </span>
+                        </span>
                       ) : currentChat?.type === 'channel' ? (
                         lang === 'ar' ? 'قناة عامة' : 'channel'
                       ) : currentChat?.type === 'group' || currentChat?.type === 'supergroup' ? (
@@ -4866,6 +4936,81 @@ export default function App() {
 
             {/* Messages Area */}
             <div className="msgs-area custom-scrollbar" ref={msgsAreaRef} id="msgsArea">
+              {/* Telegram Official Chat Restriction / Ban / Forbidden Floating Notice */}
+              {currentChat && (currentChat.is_forbidden || currentChat.is_banned || currentChat.is_kicked || currentChat.is_restricted || (currentChat.banned_rights && currentChat.banned_rights.send_messages === false)) && (
+                <div className="mb-4 mx-auto max-w-xl">
+                  {currentChat.is_forbidden ? (
+                    <div className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-start gap-3 shadow-lg backdrop-blur-md">
+                      <div className="w-8 h-8 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center shrink-0 mt-0.5 border border-red-500/30 text-sm">
+                        <i className="fas fa-lock" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-red-200 text-sm flex items-center gap-1.5 mb-1">
+                          <span>{lang === 'ar' ? '⚠️ تنبيه: المحادثة مغلقة أو غير متاحة (ChatForbidden)' : '⚠️ Chat Unavailable (ChatForbidden)'}</span>
+                        </div>
+                        <p className="text-zinc-300 leading-relaxed">
+                          {currentChat.forbidden_reason || (lang === 'ar' ? 'تم إغلاق أو تقييد هذه المجموعة على خوادم تليجرام، أو تمت إزالتك من قائمة الأعضاء.' : 'This chat is closed or restricted on Telegram servers.')}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setForbiddenModalChat(currentChat)}
+                          className="mt-2 text-[11px] font-bold text-red-300 hover:text-white underline flex items-center gap-1"
+                        >
+                          <i className="fas fa-info-circle text-[10px]" />
+                          <span>{lang === 'ar' ? 'عرض تفاصيل وأسباب الحظر الكاملة' : 'View Full Restriction Details'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (currentChat.is_banned || currentChat.is_kicked) ? (
+                    <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-3 shadow-lg backdrop-blur-md">
+                      <div className="w-8 h-8 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 mt-0.5 border border-rose-500/30 text-sm">
+                        <i className="fas fa-ban" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-rose-200 text-sm flex items-center gap-1.5 mb-1">
+                          <span>{lang === 'ar' ? '🚫 أنت محظور من هذه المجموعة (UserBannedInChannel)' : '🚫 You are banned from this chat'}</span>
+                        </div>
+                        <p className="text-zinc-300 leading-relaxed">
+                          {lang === 'ar' ? 'تم حظرك من قبل مشرفي المجموعة. لا يمكنك كتابة أو إرسال أي رسائل جديدة في هذه المحادثة.' : 'You have been banned by admins. You cannot send messages.'}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setForbiddenModalChat(currentChat)}
+                          className="mt-2 text-[11px] font-bold text-rose-300 hover:text-white underline flex items-center gap-1"
+                        >
+                          <i className="fas fa-shield-alt text-[10px]" />
+                          <span>{lang === 'ar' ? 'عرض تفاصيل الحظر' : 'View Ban Details'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-3 shadow-lg backdrop-blur-md">
+                      <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5 border border-amber-500/30 text-sm">
+                        <i className="fas fa-user-lock" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-amber-200 text-sm flex items-center gap-1.5 mb-1">
+                          <span>{lang === 'ar' ? '🔏 تقييد صلاحيات الإرسال (ChatWriteForbidden)' : '🔏 Restricted from Sending Messages'}</span>
+                        </div>
+                        <p className="text-zinc-300 leading-relaxed">
+                          {currentChat.banned_rights?.until_date && currentChat.banned_rights.until_date > 0
+                            ? (lang === 'ar' ? `تم تقييدك من إرسال الرسائل حتى: ${new Date(currentChat.banned_rights.until_date * 1000).toLocaleString('ar-EG')}` : `Restricted until: ${new Date(currentChat.banned_rights.until_date * 1000).toLocaleString()}`)
+                            : (lang === 'ar' ? 'تم تقييدك من الكتابة أو إرسال الوسائط بواسطة المشرفين.' : 'You were restricted from writing by chat admins.')}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setForbiddenModalChat(currentChat)}
+                          className="mt-2 text-[11px] font-bold text-amber-300 hover:text-white underline flex items-center gap-1"
+                        >
+                          <i className="fas fa-list-check text-[10px]" />
+                          <span>{lang === 'ar' ? 'عرض الصلاحيات المقيدة وتاريخ الانتهاء' : 'View Restricted Rights'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {loadingMessages ? (
                 <div className="list-loader" style={{ margin: 'auto' }}>
                   <div className="dot" />
@@ -5135,18 +5280,16 @@ export default function App() {
               if (isForbidden) {
                 return (
                   <div className="chat-locked-status-bar danger">
-                    <i className="fas fa-lock" />
+                    <i className="fas fa-lock text-red-500" />
                     <div className="status-text-wrap">
-                      <span className="status-title">{lang === 'ar' ? 'المجموعة مغلقة أو غير متوفرة' : 'Chat Unavailable / Closed'}</span>
+                      <span className="status-title">{lang === 'ar' ? 'المحادثة مغلقة أو غير متاحة (ChatForbidden)' : 'Chat Unavailable (Forbidden)'}</span>
                       <span className="status-desc">
-                        {currentChat?.forbidden_reason || (lang === 'ar' ? 'تم إغلاق هذه المحادثة على خوادم تليجرام.' : 'This chat is closed on Telegram.')}
+                        {currentChat?.forbidden_reason || (lang === 'ar' ? 'تم إغلاق هذه المحادثة على خوادم تليجرام أو تم حظرها.' : 'This chat is closed on Telegram servers.')}
                       </span>
                     </div>
-                    {currentChat?.restriction_reason && currentChat.restriction_reason.length > 0 && (
-                      <button className="status-action-btn" onClick={() => setForbiddenModalChat(currentChat)}>
-                        {lang === 'ar' ? 'السبب' : 'Reason'}
-                      </button>
-                    )}
+                    <button className="status-action-btn bg-red-600 hover:bg-red-500" onClick={() => setForbiddenModalChat(currentChat)}>
+                      {lang === 'ar' ? 'تفاصيل الحظر' : 'Details'}
+                    </button>
                   </div>
                 );
               }
@@ -5154,11 +5297,14 @@ export default function App() {
               if (isBannedOrKicked) {
                 return (
                   <div className="chat-locked-status-bar danger">
-                    <i className="fas fa-ban" />
+                    <i className="fas fa-ban text-rose-500" />
                     <div className="status-text-wrap">
-                      <span className="status-title">{lang === 'ar' ? 'أنت محظور من هذه المجموعة' : 'You are banned from this group'}</span>
-                      <span className="status-desc">{lang === 'ar' ? 'تمت إزالتك من قبل المشرفين ولا يمكنك إرسال الرسائل.' : 'You have been restricted by admins.'}</span>
+                      <span className="status-title">{lang === 'ar' ? 'أنت محظور من هذه المجموعة (UserBannedInChannel)' : 'You are banned from this group'}</span>
+                      <span className="status-desc">{lang === 'ar' ? 'تمت إزالتك من قِبل مشرفي المجموعة ولا يمكنك إرسال الرسائل.' : 'You were banned by chat administrators.'}</span>
                     </div>
+                    <button className="status-action-btn bg-rose-600 hover:bg-rose-500" onClick={() => setForbiddenModalChat(currentChat)}>
+                      {lang === 'ar' ? 'أسباب الحظر' : 'Ban Reason'}
+                    </button>
                   </div>
                 );
               }
@@ -5167,14 +5313,17 @@ export default function App() {
                 const untilDate = currentChat?.banned_rights?.until_date;
                 const expiryStr = untilDate && untilDate > 0
                   ? (lang === 'ar' ? `ينتهي التقييد في: ${new Date(untilDate * 1000).toLocaleString('ar-EG')}` : `Expires: ${new Date(untilDate * 1000).toLocaleString()}`)
-                  : (lang === 'ar' ? 'تم تقييدك من الكتابة بواسطة المشرفين.' : 'You were restricted from writing by admins.');
+                  : (lang === 'ar' ? 'تم تقييدك من الكتابة بواسطة المشرفين (ChatWriteForbidden).' : 'You were restricted from writing by chat admins.');
                 return (
                   <div className="chat-locked-status-bar warning">
-                    <i className="fas fa-user-lock" />
+                    <i className="fas fa-user-lock text-amber-500" />
                     <div className="status-text-wrap">
-                      <span className="status-title">{lang === 'ar' ? 'تم تقييدك من إرسال الرسائل' : 'You are restricted from sending messages'}</span>
+                      <span className="status-title">{lang === 'ar' ? 'تم تقييد حسابك من إرسال الرسائل (Restricted)' : 'Restricted from sending messages'}</span>
                       <span className="status-desc">{expiryStr}</span>
                     </div>
+                    <button className="status-action-btn bg-amber-600 hover:bg-amber-500" onClick={() => setForbiddenModalChat(currentChat)}>
+                      {lang === 'ar' ? 'الصلاحيات المقيدة' : 'Permissions'}
+                    </button>
                   </div>
                 );
               }
@@ -5648,47 +5797,126 @@ export default function App() {
         }}
         lang={lang}
       />
-      {/* ══ TELEGRAM CHAT RESTRICTION & FORBIDDEN MODAL ══ */}
-      {forbiddenModalChat && (
-        <div className="modal-overlay show" onClick={() => setForbiddenModalChat(null)}>
-          <div className="chat-forbidden-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-icon">
-              <i className="fas fa-exclamation-triangle" />
-            </div>
-            <h3 className="modal-title">
-              {forbiddenModalChat.title || forbiddenModalChat.name || (lang === 'ar' ? 'محادثة مقيدة' : 'Restricted Chat')}
-            </h3>
-            <div className="modal-body">
-              {forbiddenModalChat.restriction_reason && forbiddenModalChat.restriction_reason.length > 0 ? (
-                <div>
-                  <p style={{ fontWeight: 600, color: '#ef4444', marginBottom: 6 }}>
-                    {lang === 'ar' ? '⚠️ سبب التقييد من خوادم تليجرام:' : '⚠️ Telegram Server Restriction Reason:'}
-                  </p>
-                  {forbiddenModalChat.restriction_reason.map((r, idx) => (
-                    <div key={idx} style={{ marginBottom: 4 }}>
-                      • {r.text || r.reason}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p>
-                  {forbiddenModalChat.forbidden_reason || (lang === 'ar'
-                    ? 'هذه المجموعة أو القناة مغلقة أو محظورة على خوادم تليجرام، أو تمت إزالتك منها.'
-                    : 'This chat is closed, forbidden on Telegram servers, or you have been removed.')}
-                </p>
-              )}
-            </div>
-            <div className="modal-footer">
-              <button
-                className="btn-confirm"
-                onClick={() => setForbiddenModalChat(null)}
-              >
-                {lang === 'ar' ? 'حسناً، فهمت' : 'OK, Got It'}
-              </button>
+      {/* ══ TELEGRAM CHAT RESTRICTION, BAN & FORBIDDEN MODAL ══ */}
+      {forbiddenModalChat && (() => {
+        const isForbidden = !!forbiddenModalChat.is_forbidden || (forbiddenModalChat.restriction_reason && forbiddenModalChat.restriction_reason.length > 0);
+        const isBanned = !!forbiddenModalChat.is_banned || !!forbiddenModalChat.is_kicked;
+        const isRestricted = !!forbiddenModalChat.is_restricted || (forbiddenModalChat.banned_rights && forbiddenModalChat.banned_rights.send_messages === false);
+
+        let modalIcon = 'fa-exclamation-triangle';
+        let iconBg = 'rgba(239, 68, 68, 0.2)';
+        let iconColor = '#ef4444';
+        let defaultTitle = lang === 'ar' ? 'تنبيه القيود والحظر' : 'Restriction Details';
+
+        if (isForbidden) {
+          modalIcon = 'fa-lock';
+          iconBg = 'rgba(239, 68, 68, 0.2)';
+          iconColor = '#ef4444';
+          defaultTitle = lang === 'ar' ? '🔒 محادثة مغلقة (ChatForbidden)' : '🔒 Forbidden Chat';
+        } else if (isBanned) {
+          modalIcon = 'fa-ban';
+          iconBg = 'rgba(244, 63, 94, 0.2)';
+          iconColor = '#f43f5e';
+          defaultTitle = lang === 'ar' ? '🚫 حظر من المحادثة (UserBannedInChannel)' : '🚫 Banned from Chat';
+        } else if (isRestricted) {
+          modalIcon = 'fa-user-lock';
+          iconBg = 'rgba(245, 158, 11, 0.2)';
+          iconColor = '#f59e0b';
+          defaultTitle = lang === 'ar' ? '🔏 تقييد صلاحيات الحساب (ChatWriteForbidden)' : '🔏 Restricted Account';
+        }
+
+        return (
+          <div className="modal-overlay show" onClick={() => setForbiddenModalChat(null)}>
+            <div className="chat-forbidden-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-icon" style={{ background: iconBg, color: iconColor }}>
+                <i className={`fas ${modalIcon}`} />
+              </div>
+              <h3 className="modal-title">
+                {forbiddenModalChat.title || forbiddenModalChat.name || defaultTitle}
+              </h3>
+              <div className="text-xs font-bold text-center mb-3" style={{ color: iconColor }}>
+                {defaultTitle}
+              </div>
+              <div className="modal-body space-y-3 text-sm">
+                {isForbidden && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                    <p className="font-bold text-red-300 mb-1">
+                      {lang === 'ar' ? '🔒 حالة المحادثة على خوادم تليجرام:' : '🔒 Telegram Server State:'}
+                    </p>
+                    <p className="text-zinc-200">
+                      {forbiddenModalChat.forbidden_reason || (lang === 'ar'
+                        ? 'هذه المجموعة أو القناة مغلقة أو محظورة على خوادم Telegram، أو تمت إزالتك من قائمة الأعضاء (ChatForbidden).'
+                        : 'This chat is closed, deactivated, or forbidden on Telegram servers.')}
+                    </p>
+                  </div>
+                )}
+
+                {isBanned && (
+                  <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl">
+                    <p className="font-bold text-rose-300 mb-1">
+                      {lang === 'ar' ? '🚫 تفاصيل الحظر الإداري:' : '🚫 Ban Details:'}
+                    </p>
+                    <p className="text-zinc-200">
+                      {lang === 'ar'
+                        ? 'تم حظرك من هذه المجموعة أو القناة بواسطة مدراء المجموعة (UserBannedInChannel). لا تملك صلاحية الوصول أو إرسال الرسائل.'
+                        : 'You have been banned from this group by chat administrators.'}
+                    </p>
+                  </div>
+                )}
+
+                {isRestricted && (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                    <p className="font-bold text-amber-300 mb-1">
+                      {lang === 'ar' ? '🔏 الصلاحيات المقيدة:' : '🔏 Restricted Permissions:'}
+                    </p>
+                    <ul className="text-zinc-200 text-xs space-y-1 mt-1 list-disc list-inside">
+                      <li>{lang === 'ar' ? 'منع إرسال الرسائل النصية' : 'Send Text Messages: Restricted'}</li>
+                      {forbiddenModalChat.banned_rights?.send_media === false && (
+                        <li>{lang === 'ar' ? 'منع إرسال الوسائط والصور' : 'Send Media: Restricted'}</li>
+                      )}
+                      {forbiddenModalChat.banned_rights?.embed_links === false && (
+                        <li>{lang === 'ar' ? 'منع تضمين ومشاركة الروابط' : 'Embed Links: Restricted'}</li>
+                      )}
+                      {forbiddenModalChat.banned_rights?.send_polls === false && (
+                        <li>{lang === 'ar' ? 'منع إنشاء استطلاعات الرأي' : 'Send Polls: Restricted'}</li>
+                      )}
+                    </ul>
+                    {forbiddenModalChat.banned_rights?.until_date && forbiddenModalChat.banned_rights.until_date > 0 && (
+                      <div className="mt-2 text-xs font-bold text-amber-400">
+                        {lang === 'ar'
+                          ? `ينتهي هذا التقييد تلقائياً في: ${new Date(forbiddenModalChat.banned_rights.until_date * 1000).toLocaleString('ar-EG')}`
+                          : `Expires on: ${new Date(forbiddenModalChat.banned_rights.until_date * 1000).toLocaleString()}`}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {forbiddenModalChat.restriction_reason && forbiddenModalChat.restriction_reason.length > 0 && (
+                  <div className="p-3 bg-zinc-900/80 border border-zinc-700/60 rounded-xl">
+                    <p className="font-bold text-red-400 mb-1.5 text-xs">
+                      {lang === 'ar' ? '📋 الأسباب الرسمية الواردة من Telegram:' : '📋 Telegram Platform Reasons:'}
+                    </p>
+                    {forbiddenModalChat.restriction_reason.map((r, idx) => (
+                      <div key={idx} className="text-xs text-zinc-300 mb-1 flex items-start gap-1">
+                        <span className="text-red-400">•</span>
+                        <span>{r.text || r.reason} {r.platform ? `(${r.platform})` : ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button
+                  className="btn-confirm"
+                  onClick={() => setForbiddenModalChat(null)}
+                >
+                  {lang === 'ar' ? 'حسناً، فهمت' : 'OK, Got It'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ══ TELEGRAM DIRECT APK & APP INSTALLER MODAL ══ */}
       <TelegramApkInstallModal
