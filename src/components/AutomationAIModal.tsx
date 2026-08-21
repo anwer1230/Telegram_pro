@@ -12,12 +12,21 @@ import {
   BarChart3,
   FileText,
   Search,
-  Users2,
   Maximize2,
   Minimize2,
   RefreshCw,
-  Sliders,
   Sparkles,
+  HeartPulse,
+  Monitor,
+  LayoutGrid,
+  Shield,
+  Clock,
+  ExternalLink,
+  ChevronLeft,
+  ChevronRight,
+  FileCode,
+  CheckCircle2,
+  Radio
 } from 'lucide-react';
 import { BatchesTab } from './tabs/BatchesTab';
 import { SendMonitorTab } from './tabs/SendMonitorTab';
@@ -29,6 +38,8 @@ import { RotatingTab } from './tabs/RotatingTab';
 import { LearningTab } from './tabs/LearningTab';
 import { AcademicTab } from './tabs/AcademicTab';
 import { DocFormatterTab } from './tabs/DocFormatterTab';
+import { PresentationTab } from './tabs/PresentationTab';
+import { SystemHealthTab } from './tabs/SystemHealthTab';
 import { LiveLogs } from './LiveLogs';
 import {
   WhatsAppSettings,
@@ -41,6 +52,7 @@ import {
 } from '../types';
 
 export type AutomationTab =
+  | 'overview'
   | 'send_monitor'
   | 'batches'
   | 'link_scraper'
@@ -50,7 +62,10 @@ export type AutomationTab =
   | 'rotating'
   | 'learning'
   | 'academic'
-  | 'formatter';
+  | 'formatter'
+  | 'presentation'
+  | 'system_health'
+  | 'logs';
 
 interface AutomationAIModalProps {
   isOpen: boolean;
@@ -61,7 +76,7 @@ interface AutomationAIModalProps {
 export const AutomationAIModal: React.FC<AutomationAIModalProps> = ({
   isOpen,
   onClose,
-  initialTab = 'batches',
+  initialTab = 'overview',
 }) => {
   const [activeTab, setActiveTab] = useState<AutomationTab>(initialTab);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -169,7 +184,7 @@ export const AutomationAIModal: React.FC<AutomationAIModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       fetchAllData();
-      addLog('تم فتح مركز الأتمتة المتقدم وتحديث كافة المؤشرات والبيانات', 'info');
+      addLog('تم تشغيل لوحة الأتمتة المتقدمة وتحديث مؤشرات النظام', 'info');
 
       // Real-time synchronization stream for automation tasks
       let es: EventSource | null = null;
@@ -551,46 +566,49 @@ export const AutomationAIModal: React.FC<AutomationAIModalProps> = ({
     }
   };
 
-  const navItems = [
+  // Nav Items definition for the tab bar
+  const navTabs = [
+    { id: 'overview' as const, label: 'لوحة الوظائف الرئيسية', icon: <LayoutGrid className="w-4 h-4 text-emerald-400" /> },
     { id: 'send_monitor' as const, label: 'الإرسال والمراقبة', icon: <Rocket className="w-4 h-4 text-amber-400" /> },
-    { id: 'batches' as const, label: 'رسائلي (الدفعات)', icon: <Mail className="w-4 h-4" /> },
-    { id: 'link_scraper' as const, label: 'استخراج وفحص وفرز الروابط', icon: <Search className="w-4 h-4 text-sky-400" />, badge: 'فحص وفرز 🔍' },
-    { id: 'autojoin' as const, label: 'الانضمام التلقائي', icon: <Zap className="w-4 h-4" />, badge: 'سريع' },
-    { id: 'links' as const, label: 'روابطي المحفوظة', icon: <Bookmark className="w-4 h-4" /> },
-    { id: 'autoreply' as const, label: 'الرد التلقائي', icon: <Bot className="w-4 h-4" /> },
-    { id: 'rotating' as const, label: 'النشر المتسلسل الدوار', icon: <Repeat className="w-4 h-4" /> },
-    { id: 'learning' as const, label: 'التعلم الذكي', icon: <Brain className="w-4 h-4" />, badge: 'AI' },
-    { id: 'academic' as const, label: 'التحليل الأكاديمي', icon: <BarChart3 className="w-4 h-4" /> },
-    { id: 'formatter' as const, label: 'منسق المستندات والبحوث', icon: <FileText className="w-4 h-4" /> },
+    { id: 'batches' as const, label: '📨 رسائلي', icon: <Mail className="w-4 h-4 text-sky-400" />, badge: sentBatches.length > 0 ? String(sentBatches.length) : undefined },
+    { id: 'link_scraper' as const, label: 'البحث في روابطي', icon: <Search className="w-4 h-4 text-amber-400" /> },
+    { id: 'autojoin' as const, label: 'الانضمام المتقدم', icon: <Zap className="w-4 h-4 text-rose-400" /> },
+    { id: 'links' as const, label: 'الروابط المحفوظة', icon: <Bookmark className="w-4 h-4 text-blue-400" /> },
+    { id: 'autoreply' as const, label: 'الردود التلقائية', icon: <Bot className="w-4 h-4 text-cyan-400" /> },
+    { id: 'rotating' as const, label: 'النشر الدوري', icon: <Repeat className="w-4 h-4 text-emerald-400" /> },
+    { id: 'learning' as const, label: 'نظام التعلم الذكي', icon: <Brain className="w-4 h-4 text-purple-400" /> },
+    { id: 'academic' as const, label: 'التحليل الأكاديمي', icon: <BarChart3 className="w-4 h-4 text-indigo-400" /> },
+    { id: 'formatter' as const, label: 'منسّق الملفات', icon: <FileText className="w-4 h-4 text-teal-400" /> },
+    { id: 'presentation' as const, label: 'منشئ العروض (PPTX)', icon: <Monitor className="w-4 h-4 text-purple-400" /> },
+    { id: 'system_health' as const, label: 'صحة النظام', icon: <HeartPulse className="w-4 h-4 text-rose-400" /> },
+    { id: 'logs' as const, label: 'سجلات النظام', icon: <Radio className="w-4 h-4 text-zinc-400" />, badge: 'مباشر ●' },
   ];
-
-  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[2500] flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md select-none">
       <div
         className={`bg-zinc-950 border border-zinc-800 text-zinc-100 flex flex-col rounded-2xl shadow-2xl transition-all duration-300 overflow-hidden font-['Cairo',sans-serif] ${
-          isFullscreen ? 'w-full h-full rounded-none' : 'w-full max-w-7xl h-[92vh]'
+          isFullscreen ? 'w-full h-full rounded-none' : 'w-full max-w-7xl h-[94vh]'
         }`}
         dir="rtl"
       >
-        {/* Top App Bar Header */}
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 bg-zinc-900/90 border-b border-zinc-800/90 shrink-0">
+        {/* Header App Bar */}
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 bg-zinc-900/90 border-b border-zinc-800 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold shadow-inner">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-extrabold text-sm sm:text-base text-zinc-100 tracking-tight">
-                  منظومة أتمتة تليجرام المتقدمة (Enjaz Suite)
+                <span className="font-extrabold text-sm sm:text-base text-zinc-100">
+                  لوحة الوظائف والأتمتة المتقدمة
                 </span>
                 <span className="px-2 py-0.5 text-[10px] rounded-md font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  v4.8 Pro
+                  Telegram Automation Pro
                 </span>
               </div>
               <p className="text-[11px] text-zinc-400 hidden sm:block">
-                أدوات الإرسال الدوار، استخراج وفحص وفرز الروابط، الانضمام التلقائي، والتحليل الأكاديمي الشامل
+                منظومة متكاملة للنشر الذكي، الردود التلقائية، الانضمام السريع، والأدوات الأكاديمية والتحليلية
               </p>
             </div>
           </div>
@@ -620,18 +638,18 @@ export const AutomationAIModal: React.FC<AutomationAIModalProps> = ({
           </div>
         </div>
 
-        {/* Navigation Tabs Bar */}
-        <div className="bg-zinc-900/60 border-b border-zinc-800/80 px-2 sm:px-4 shrink-0">
+        {/* Scrollable Tabs Bar */}
+        <div className="bg-zinc-900/60 border-b border-zinc-800/80 px-3 shrink-0">
           <div className="flex items-center gap-1.5 overflow-x-auto py-2 scrollbar-none">
-            {navItems.map((item) => {
+            {navTabs.map((item) => {
               const isActive = activeTab === item.id;
               return (
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs whitespace-nowrap transition-all duration-200 ${
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all duration-200 ${
                     isActive
-                      ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/50 border border-emerald-500/50'
+                      ? 'bg-emerald-600 text-white shadow-md border border-emerald-500/50'
                       : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60 border border-transparent'
                   }`}
                 >
@@ -639,7 +657,7 @@ export const AutomationAIModal: React.FC<AutomationAIModalProps> = ({
                   <span>{item.label}</span>
                   {item.badge && (
                     <span
-                      className={`px-1.5 py-0.5 text-[9px] rounded-md font-black transition-colors ${
+                      className={`px-1.5 py-0.5 text-[9px] rounded-md font-black ${
                         isActive
                           ? 'bg-zinc-950/40 text-emerald-200 border border-white/10'
                           : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
@@ -654,17 +672,222 @@ export const AutomationAIModal: React.FC<AutomationAIModalProps> = ({
           </div>
         </div>
 
-        {/* Tab Content Body */}
+        {/* Tab Body Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 bg-zinc-950/50">
+          {/* 1. Overview Hub matching GitHub repo */}
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              {/* Top Banner */}
+              <div className="rounded-2xl p-5 text-white bg-gradient-to-r from-emerald-800 via-teal-700 to-cyan-700 shadow-xl flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-2xl shadow-inner">
+                    <i className="fas fa-cubes text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-lg">بوابة الوظائف والأتمتة الذكية</h3>
+                    <p className="text-xs text-emerald-100 opacity-90 mt-0.5">
+                      اختر الوظيفة المطلوبة أدناه أو تنقل عبر التبويبات العلوية للتحكم الفوري
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setActiveTab('send_monitor')}
+                    className="bg-white text-emerald-900 hover:bg-emerald-50 font-bold px-4 py-2 rounded-xl text-xs shadow transition-all flex items-center gap-1.5"
+                  >
+                    <Rocket className="w-3.5 h-3.5" />
+                    <span>إعدادات المراقبة والإرسال</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 9 Core Functions Grid (Matching GitHub repo exact layout) */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-zinc-300 flex items-center gap-2">
+                    <i className="fas fa-th-large text-emerald-400" />
+                    <span>الوظائف والأدوات الأساسية (9 وظائف):</span>
+                  </h4>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 gap-3">
+                  {/* 1. نظام التعلم الذكي */}
+                  <button
+                    onClick={() => setActiveTab('learning')}
+                    className="p-4 rounded-xl bg-zinc-900 border border-purple-500/30 hover:border-purple-500 hover:bg-purple-950/20 text-center transition-all group shadow-sm flex flex-col items-center justify-center min-h-[110px]"
+                  >
+                    <i className="fas fa-brain text-2xl mb-2 text-purple-400 group-hover:scale-110 transition-transform" />
+                    <span className="text-xs font-bold text-zinc-100">نظام التعلم الذكي</span>
+                    <span className="text-[10px] text-purple-300/70 mt-1">تلقين البوت والردود الذكية</span>
+                  </button>
+
+                  {/* 2. النشر الدوري */}
+                  <button
+                    onClick={() => setActiveTab('rotating')}
+                    className="p-4 rounded-xl bg-zinc-900 border border-emerald-500/30 hover:border-emerald-500 hover:bg-emerald-950/20 text-center transition-all group shadow-sm flex flex-col items-center justify-center min-h-[110px]"
+                  >
+                    <i className="fas fa-sync-alt text-2xl mb-2 text-emerald-400 group-hover:rotate-180 transition-transform duration-500" />
+                    <span className="text-xs font-bold text-zinc-100">النشر الدوري</span>
+                    <span className="text-[10px] text-emerald-300/70 mt-1">تدوير 5 رسائل بالتناوب</span>
+                  </button>
+
+                  {/* 3. البحث في روابطي */}
+                  <button
+                    onClick={() => setActiveTab('link_scraper')}
+                    className="p-4 rounded-xl bg-zinc-900 border border-amber-500/30 hover:border-amber-500 hover:bg-amber-950/20 text-center transition-all group shadow-sm flex flex-col items-center justify-center min-h-[110px]"
+                  >
+                    <i className="fas fa-search text-2xl mb-2 text-amber-400 group-hover:scale-110 transition-transform" />
+                    <span className="text-xs font-bold text-zinc-100">البحث في روابطي</span>
+                    <span className="text-[10px] text-amber-300/70 mt-1">بحث · رسائل · دول</span>
+                  </button>
+
+                  {/* 4. الانضمام المتقدم */}
+                  <button
+                    onClick={() => setActiveTab('autojoin')}
+                    className="p-4 rounded-xl bg-zinc-900 border border-rose-500/30 hover:border-rose-500 hover:bg-rose-950/20 text-center transition-all group shadow-sm flex flex-col items-center justify-center min-h-[110px]"
+                  >
+                    <i className="fas fa-bolt text-2xl mb-2 text-rose-400 group-hover:scale-110 transition-transform" />
+                    <span className="text-xs font-bold text-zinc-100">الانضمام المتقدم</span>
+                    <span className="text-[10px] text-rose-300/70 mt-1">انضمام فوري بدون حظر</span>
+                  </button>
+
+                  {/* 5. صحة النظام */}
+                  <button
+                    onClick={() => setActiveTab('system_health')}
+                    className="p-4 rounded-xl bg-zinc-900 border border-teal-500/30 hover:border-teal-500 hover:bg-teal-950/20 text-center transition-all group shadow-sm flex flex-col items-center justify-center min-h-[110px]"
+                  >
+                    <i className="fas fa-heartbeat text-2xl mb-2 text-teal-400 group-hover:scale-110 transition-transform" />
+                    <span className="text-xs font-bold text-zinc-100">صحة النظام</span>
+                    <span className="text-[10px] text-teal-300/70 mt-1">الذاكرة · المعالج · الجلسات</span>
+                  </button>
+
+                  {/* 6. الردود التلقائية */}
+                  <button
+                    onClick={() => setActiveTab('autoreply')}
+                    className="p-4 rounded-xl bg-zinc-900 border border-cyan-500/30 hover:border-cyan-500 hover:bg-cyan-950/20 text-center transition-all group shadow-sm flex flex-col items-center justify-center min-h-[110px]"
+                  >
+                    <i className="fas fa-reply-all text-2xl mb-2 text-cyan-400 group-hover:scale-110 transition-transform" />
+                    <span className="text-xs font-bold text-zinc-100">الردود التلقائية</span>
+                    <span className="text-[10px] text-cyan-300/70 mt-1">رد فوري بالكلمات المفتاحية</span>
+                  </button>
+
+                  {/* 7. رسائلي */}
+                  <button
+                    onClick={() => setActiveTab('batches')}
+                    className="p-4 rounded-xl bg-zinc-900 border border-sky-500/30 hover:border-sky-500 hover:bg-sky-950/20 text-center transition-all group shadow-sm flex flex-col items-center justify-center min-h-[110px]"
+                  >
+                    <i className="fas fa-envelope text-2xl mb-2 text-sky-400 group-hover:scale-110 transition-transform" />
+                    <span className="text-xs font-bold text-zinc-100">📨 رسائلي</span>
+                    <span className="text-[10px] text-sky-300/70 mt-1">
+                      {sentBatches.length} دفعات مسجلة
+                    </span>
+                  </button>
+
+                  {/* 8. الروابط المحفوظة */}
+                  <button
+                    onClick={() => setActiveTab('links')}
+                    className="p-4 rounded-xl bg-zinc-900 border border-blue-500/30 hover:border-blue-500 hover:bg-blue-950/20 text-center transition-all group shadow-sm flex flex-col items-center justify-center min-h-[110px]"
+                  >
+                    <i className="fas fa-bookmark text-2xl mb-2 text-blue-400 group-hover:scale-110 transition-transform" />
+                    <span className="text-xs font-bold text-zinc-100">الروابط المحفوظة</span>
+                    <span className="text-[10px] text-blue-300/70 mt-1">
+                      {savedLinks.length} روابط مصنفة
+                    </span>
+                  </button>
+
+                  {/* 9. سجلات النظام */}
+                  <button
+                    onClick={() => setActiveTab('logs')}
+                    className="p-4 rounded-xl bg-zinc-900 border border-zinc-700 hover:border-zinc-500 hover:bg-zinc-800 text-center transition-all group shadow-sm flex flex-col items-center justify-center min-h-[110px]"
+                  >
+                    <i className="fas fa-terminal text-2xl mb-2 text-zinc-400 group-hover:scale-110 transition-transform" />
+                    <span className="text-xs font-bold text-zinc-100">سجلات النظام</span>
+                    <span className="text-[10px] text-emerald-400 mt-1 font-bold">● مباشر</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Academic & Document Tools Section */}
+              <div className="space-y-3 pt-2">
+                <h4 className="text-xs font-bold text-zinc-300 flex items-center gap-2">
+                  <i className="fas fa-graduation-cap text-indigo-400" />
+                  <span>الأدوات الأكاديمية والتحليلية المتقدمة:</span>
+                </h4>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* Academic Analysis */}
+                  <div
+                    onClick={() => setActiveTab('academic')}
+                    className="p-4 rounded-xl bg-gradient-to-br from-indigo-950/50 to-zinc-900 border border-indigo-500/30 hover:border-indigo-500 cursor-pointer transition-all space-y-2 group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                        <i className="fas fa-chart-bar" />
+                      </div>
+                      <span className="text-[10px] font-bold bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded">
+                        SPSS + AI
+                      </span>
+                    </div>
+                    <h5 className="font-bold text-xs text-zinc-100">التحليل الأكاديمي الذكي</h5>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed">
+                      تحليل استبانات ليكرت، مصفوفة الارتباط، الانحدار الخطي، والتقرير الإحصائي
+                    </p>
+                  </div>
+
+                  {/* Document Formatter */}
+                  <div
+                    onClick={() => setActiveTab('formatter')}
+                    className="p-4 rounded-xl bg-gradient-to-br from-teal-950/50 to-zinc-900 border border-teal-500/30 hover:border-teal-500 cursor-pointer transition-all space-y-2 group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="w-8 h-8 rounded-lg bg-teal-500/20 text-teal-400 flex items-center justify-center">
+                        <i className="fas fa-file-word" />
+                      </div>
+                      <span className="text-[10px] font-bold bg-teal-500/20 text-teal-300 px-2 py-0.5 rounded">
+                        Word + PDF
+                      </span>
+                    </div>
+                    <h5 className="font-bold text-xs text-zinc-100">منسّق الملفات والمستندات</h5>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed">
+                      استخراج وتنسيق مستندات Word و PDF وتصديرها بصيغ متعددة
+                    </p>
+                  </div>
+
+                  {/* Presentation Builder */}
+                  <div
+                    onClick={() => setActiveTab('presentation')}
+                    className="p-4 rounded-xl bg-gradient-to-br from-purple-950/50 to-zinc-900 border border-purple-500/30 hover:border-purple-500 cursor-pointer transition-all space-y-2 group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center">
+                        <i className="fas fa-file-powerpoint" />
+                      </div>
+                      <span className="text-[10px] font-bold bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded">
+                        PowerPoint PPTX
+                      </span>
+                    </div>
+                    <h5 className="font-bold text-xs text-zinc-100">منشئ العروض التقديمية</h5>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed">
+                      تصميم عروض بوربوينت احترافية بالذكاء الاصطناعي مع السمات المتنوعة
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 2. Send & Monitor Tab */}
           {activeTab === 'send_monitor' && (
             <SendMonitorTab
-              onBack={() => setActiveTab('batches')}
+              onBack={() => setActiveTab('overview')}
               initialMessage={settings.message}
               initialGroups={settings.groups}
               initialWatchWords={settings.watch_words}
             />
           )}
 
+          {/* 3. Batches Tab */}
           {activeTab === 'batches' && (
             <BatchesTab
               batches={sentBatches}
@@ -674,6 +897,7 @@ export const AutomationAIModal: React.FC<AutomationAIModalProps> = ({
             />
           )}
 
+          {/* 4. Link Scraper & Search */}
           {activeTab === 'link_scraper' && (
             <LinkScraperTab
               onSendToAutoJoin={(urls) => {
@@ -696,6 +920,7 @@ export const AutomationAIModal: React.FC<AutomationAIModalProps> = ({
             />
           )}
 
+          {/* 5. Auto Join Tab */}
           {activeTab === 'autojoin' && (
             <AutoJoinTab
               onStartAutoJoin={handleStartAutoJoin}
@@ -705,6 +930,7 @@ export const AutomationAIModal: React.FC<AutomationAIModalProps> = ({
             />
           )}
 
+          {/* 6. Saved Links Tab */}
           {activeTab === 'links' && (
             <SavedLinksTab
               links={savedLinks}
@@ -715,6 +941,7 @@ export const AutomationAIModal: React.FC<AutomationAIModalProps> = ({
             />
           )}
 
+          {/* 7. Auto Reply Tab */}
           {activeTab === 'autoreply' && (
             <AutoReplyTab
               enabled={autoReplyEnabled}
@@ -725,6 +952,7 @@ export const AutomationAIModal: React.FC<AutomationAIModalProps> = ({
             />
           )}
 
+          {/* 8. Rotating Auto-Poster Tab */}
           {activeTab === 'rotating' && (
             <RotatingTab
               status={rotatingStatus}
@@ -734,6 +962,7 @@ export const AutomationAIModal: React.FC<AutomationAIModalProps> = ({
             />
           )}
 
+          {/* 9. Smart Learning Tab */}
           {activeTab === 'learning' && (
             <LearningTab
               activePrivate={learningData.active_private}
@@ -744,12 +973,47 @@ export const AutomationAIModal: React.FC<AutomationAIModalProps> = ({
             />
           )}
 
+          {/* 10. Academic Analysis Tab */}
           {activeTab === 'academic' && <AcademicTab onAnalyze={handleAnalyzeAcademic} />}
 
+          {/* 11. Document Formatter Tab */}
           {activeTab === 'formatter' && <DocFormatterTab onExportDoc={handleExportDoc} />}
 
-          {/* Live Activity Terminal */}
-          <LiveLogs logs={logs} onClearLogs={() => setLogs([])} />
+          {/* 12. Presentation Builder Tab */}
+          {activeTab === 'presentation' && <PresentationTab />}
+
+          {/* 13. System Health Tab */}
+          {activeTab === 'system_health' && <SystemHealthTab />}
+
+          {/* 14. Logs Tab */}
+          {activeTab === 'logs' && (
+            <div className="space-y-4">
+              <div className="rounded-xl p-4 text-white bg-gradient-to-r from-zinc-800 to-zinc-900 border border-zinc-700 shadow flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center text-xl">
+                    <i className="fas fa-terminal text-emerald-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base">سجلات النظام المباشرة (System Terminal)</h3>
+                    <p className="text-xs text-zinc-400">
+                      بث مباشر لكافة الأحداث والعمليات والمهام الخلفية المنفذة
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setLogs([])}
+                  className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  مسح السجلات
+                </button>
+              </div>
+
+              <LiveLogs logs={logs} onClearLogs={() => setLogs([])} />
+            </div>
+          )}
+
+          {/* Live Activity Terminal snippet at the bottom of non-logs tabs */}
+          {activeTab !== 'logs' && <LiveLogs logs={logs} onClearLogs={() => setLogs([])} />}
         </div>
       </div>
     </div>

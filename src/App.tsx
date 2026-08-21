@@ -237,7 +237,30 @@ function fmtDuration(seconds: number): string {
 }
 
 export function getChatDisplayName(
-  chat: { title?: string; name?: string; type?: string; first_name?: string; last_name?: string; username?: string; is_group?: boolean; is_channel?: boolean } | null | undefined,
+  chat: (Partial<ChatItem> & {
+    title?: string;
+    name?: string;
+    type?: string;
+    first_name?: string;
+    last_name?: string;
+    username?: string;
+    is_group?: boolean;
+    is_channel?: boolean;
+    is_forbidden?: boolean;
+    forbidden_reason?: string;
+    is_restricted?: boolean;
+    is_banned?: boolean;
+    is_kicked?: boolean;
+    restriction_reason?: Array<{ platform: string; reason: string; text: string }>;
+    banned_rights?: {
+      send_messages?: boolean;
+      send_media?: boolean;
+      send_stickers?: boolean;
+      embed_links?: boolean;
+      send_polls?: boolean;
+      until_date?: number;
+    };
+  }) | null | undefined,
   lang: string = 'ar'
 ): string {
   if (!chat) return '';
@@ -257,6 +280,18 @@ export function getChatDisplayName(
     if (chat.username) {
       return chat.username.startsWith('@') ? chat.username : `@${chat.username}`;
     }
+    if (chat.is_forbidden) {
+      return chat.forbidden_reason || (lang === 'ar' ? 'محادثة مغلقة (Forbidden)' : 'Forbidden Chat');
+    }
+    if (chat.is_banned || chat.is_kicked) {
+      return lang === 'ar' ? 'مجموعة محظورة (Banned)' : 'Banned Chat';
+    }
+    if (chat.is_restricted || (chat.banned_rights && chat.banned_rights.send_messages === false)) {
+      return lang === 'ar' ? 'مجموعة مقيدة (Restricted)' : 'Restricted Chat';
+    }
+    if (chat.restriction_reason && chat.restriction_reason.length > 0) {
+      return chat.restriction_reason[0].text || chat.restriction_reason[0].reason || (lang === 'ar' ? 'مجموعة مقيدة' : 'Restricted Group');
+    }
     return chat.type === 'channel' || chat.is_channel
       ? (lang === 'ar' ? 'قناة عامة' : 'Telegram Channel')
       : (lang === 'ar' ? 'مجموعة تليجرام' : 'Telegram Group');
@@ -273,7 +308,101 @@ export function getChatDisplayName(
   if (chat.username) {
     return chat.username.startsWith('@') ? chat.username : `@${chat.username}`;
   }
+  if (chat.is_forbidden) {
+    return chat.forbidden_reason || (lang === 'ar' ? 'محادثة مغلقة (Forbidden)' : 'Forbidden Chat');
+  }
+  if (chat.is_banned || chat.is_kicked) {
+    return lang === 'ar' ? 'مستخدم محظور (Banned)' : 'Banned User';
+  }
+  if (chat.is_restricted || (chat.banned_rights && chat.banned_rights.send_messages === false)) {
+    return lang === 'ar' ? 'حساب مقيد (Restricted)' : 'Restricted Account';
+  }
+  if (chat.restriction_reason && chat.restriction_reason.length > 0) {
+    return chat.restriction_reason[0].text || chat.restriction_reason[0].reason || (lang === 'ar' ? 'محادثة مقيدة' : 'Restricted Chat');
+  }
+
   return lang === 'ar' ? 'محادثة تليجرام' : 'Telegram Chat';
+}
+
+export function getChatLastMessagePreview(
+  chat: ChatItem | null | undefined,
+  lang: string = 'ar',
+  draft?: string
+): {
+  text: string;
+  isRestriction: boolean;
+  icon?: string;
+  badgeClass?: string;
+  isDraft?: boolean;
+} {
+  if (!chat) return { text: '', isRestriction: false };
+
+  // 1. Draft message if present
+  if (draft && !chat.is_forbidden) {
+    return {
+      text: draft,
+      isRestriction: false,
+      isDraft: true
+    };
+  }
+
+  // 2. ChatForbidden / Deactivated on Telegram servers
+  if (chat.is_forbidden) {
+    const reason =
+      chat.forbidden_reason ||
+      (chat.restriction_reason && chat.restriction_reason.length > 0
+        ? (chat.restriction_reason[0].text || chat.restriction_reason[0].reason)
+        : '') ||
+      (lang === 'ar' ? 'المحادثة مغلقة أو غير متاحة على خوادم تليجرام' : 'Chat closed or unavailable on Telegram');
+    return {
+      text: reason,
+      isRestriction: true,
+      icon: 'fa-lock',
+      badgeClass: 'text-red-400 font-medium'
+    };
+  }
+
+  // 3. UserBannedInChannel / Kicked
+  if (chat.is_banned || chat.is_kicked) {
+    return {
+      text: lang === 'ar' ? 'أنت محظور من هذه المجموعة (UserBannedInChannel)' : 'You are banned from this chat (UserBannedInChannel)',
+      isRestriction: true,
+      icon: 'fa-ban',
+      badgeClass: 'text-rose-400 font-medium'
+    };
+  }
+
+  // 4. ChatWriteForbidden / Restricted Rights
+  if (chat.is_restricted || (chat.banned_rights && chat.banned_rights.send_messages === false)) {
+    const untilDate = chat.banned_rights?.until_date;
+    const expiryStr = untilDate && untilDate > 0
+      ? (lang === 'ar' ? `مقيد من الإرسال حتى ${new Date(untilDate * 1000).toLocaleString('ar-EG')}` : `Restricted from sending until ${new Date(untilDate * 1000).toLocaleString()}`)
+      : (lang === 'ar' ? 'تم تقييد حسابك من إرسال الرسائل (ChatWriteForbidden)' : 'Restricted from sending messages (ChatWriteForbidden)');
+    return {
+      text: expiryStr,
+      isRestriction: true,
+      icon: 'fa-user-lock',
+      badgeClass: 'text-amber-400 font-medium'
+    };
+  }
+
+  // 5. Telegram official restriction_reason
+  if (chat.restriction_reason && chat.restriction_reason.length > 0) {
+    const r = chat.restriction_reason[0];
+    const rText = r.text || r.reason || (lang === 'ar' ? 'محتوى مقيد طبقاً لسياسات تليجرام' : 'Content restricted by Telegram policy');
+    return {
+      text: rText,
+      isRestriction: true,
+      icon: 'fa-exclamation-triangle',
+      badgeClass: 'text-red-400 font-medium'
+    };
+  }
+
+  // 6. Normal last message
+  return {
+    text: chat.lastMsg || (lang === 'ar' ? 'محادثة جديدة' : 'New chat'),
+    isRestriction: false
+  };
 }
 
 export function renderFormattedMessageText(text: string, onOpenTelegramLink?: (urlOrUsername: string) => void) {
@@ -3413,7 +3542,15 @@ export default function App() {
     const titleStr = (c.title || '').toLowerCase();
     const userStr = (c.username || '').toLowerCase();
     const msgStr = (c.lastMsg || '').toLowerCase();
-    return resolvedName.includes(q) || nameStr.includes(q) || titleStr.includes(q) || userStr.includes(q) || msgStr.includes(q);
+    const previewText = getChatLastMessagePreview(c, lang).text.toLowerCase();
+    return (
+      resolvedName.includes(q) ||
+      nameStr.includes(q) ||
+      titleStr.includes(q) ||
+      userStr.includes(q) ||
+      msgStr.includes(q) ||
+      previewText.includes(q)
+    );
   });
 
   // Enhanced Telegram chat list ordering with 'last-active' priority for group chats:
@@ -4524,32 +4661,31 @@ export default function App() {
                     </div>
                     <div className="chat-bot">
                       <div className="chat-msg">
-                        {chatDraft ? (
-                          <span>
-                            <span className="draft-badge">{lang === 'ar' ? 'مسودة: ' : 'Draft: '}</span>
-                            {chatDraft}
-                          </span>
-                        ) : c.is_forbidden ? (
-                          <span className="text-red-400 font-medium flex items-center gap-1">
-                            <i className="fas fa-lock text-[10px]" />
-                            <span className="truncate">{c.forbidden_reason || (lang === 'ar' ? 'المحادثة مغلقة أو غير متاحة' : 'Chat closed / unavailable')}</span>
-                          </span>
-                        ) : (c.is_banned || c.is_kicked) ? (
-                          <span className="text-rose-400 font-medium flex items-center gap-1">
-                            <i className="fas fa-ban text-[10px]" />
-                            <span>{lang === 'ar' ? 'أنت محظور من هذه المجموعة' : 'You are banned from this chat'}</span>
-                          </span>
-                        ) : (c.is_restricted || (c.banned_rights && c.banned_rights.send_messages === false)) ? (
-                          <span className="text-amber-400 font-medium flex items-center gap-1">
-                            <i className="fas fa-user-lock text-[10px]" />
-                            <span>{lang === 'ar' ? 'تم تقييد حسابك من إرسال الرسائل' : 'Restricted from sending messages'}</span>
-                          </span>
-                        ) : (
-                          <>
-                            {c.isOut && <span style={{ color: 'var(--text2)' }}>{lang === 'ar' ? 'أنت: ' : 'You: '}</span>}
-                            {c.lastMsg || (lang === 'ar' ? 'محادثة جديدة' : 'New chat')}
-                          </>
-                        )}
+                        {(() => {
+                          const preview = getChatLastMessagePreview(c, lang, chatDraft);
+                          if (preview.isDraft) {
+                            return (
+                              <span>
+                                <span className="draft-badge">{lang === 'ar' ? 'مسودة: ' : 'Draft: '}</span>
+                                {preview.text}
+                              </span>
+                            );
+                          }
+                          if (preview.isRestriction) {
+                            return (
+                              <span className={`font-medium flex items-center gap-1.5 ${preview.badgeClass || 'text-red-400'}`}>
+                                {preview.icon && <i className={`fas ${preview.icon} text-[10px] shrink-0`} />}
+                                <span className="truncate">{preview.text}</span>
+                              </span>
+                            );
+                          }
+                          return (
+                            <>
+                              {c.isOut && <span style={{ color: 'var(--text2)' }}>{lang === 'ar' ? 'أنت: ' : 'You: '}</span>}
+                              {preview.text}
+                            </>
+                          );
+                        })()}
                       </div>
                       <div className="chat-icons">
                         <TelegramUnreadBadge

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Repeat, Play, Square, Save, Clock, Hourglass } from 'lucide-react';
+import { Repeat, Play, Square, Save, Clock, Hourglass, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface RotatingTabProps {
   status: {
@@ -27,13 +27,13 @@ export const RotatingTab: React.FC<RotatingTabProps> = ({
   status,
   onSave,
   onStart,
-  onStop
+  onStop,
 }) => {
   const [messages, setMessages] = useState<string[]>(
     status.messages?.length ? status.messages : ['', '', '', '', '']
   );
   const [groups, setGroups] = useState((status.groups || []).join('\n'));
-  const [intervalVal, setIntervalVal] = useState(status.interval || 5);
+  const [intervalVal, setIntervalVal] = useState(status.interval_minutes || status.interval || 15);
   const [countdown, setCountdown] = useState<number>(status.next_send_in || 0);
 
   useEffect(() => {
@@ -43,7 +43,9 @@ export const RotatingTab: React.FC<RotatingTabProps> = ({
       setMessages(padded.slice(0, 5));
     }
     if (status.groups?.length) setGroups(status.groups.join('\n'));
-    if (status.interval) setIntervalVal(status.interval);
+    if (status.interval || status.interval_minutes) {
+      setIntervalVal(status.interval_minutes || status.interval || 15);
+    }
   }, [status]);
 
   useEffect(() => {
@@ -62,10 +64,6 @@ export const RotatingTab: React.FC<RotatingTabProps> = ({
     setMessages(updated);
   };
 
-  const handlePresetClick = (minutes: number) => {
-    setIntervalVal(minutes);
-  };
-
   const formatCountdown = (sec: number) => {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
@@ -80,179 +78,170 @@ export const RotatingTab: React.FC<RotatingTabProps> = ({
     );
   };
 
-  const totalSec = (intervalVal || 5) * 60;
-  const progressPercent = totalSec > 0 ? Math.min(100, Math.round(((totalSec - countdown) / totalSec) * 100)) : 0;
-
   return (
-    <div className="space-y-6">
-      
+    <div className="space-y-4 text-right" dir="rtl">
       {/* Header Banner */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex items-center justify-between gap-4">
+      <div className="rounded-xl p-4 text-white bg-gradient-to-r from-emerald-700 via-green-600 to-teal-600 shadow-md flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-emerald-500/20 rounded-xl text-emerald-400 border border-emerald-500/30">
-            <Repeat className="w-6 h-6" />
+          <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center text-xl shadow-inner">
+            <i className="fas fa-sync-alt text-white" />
           </div>
           <div>
-            <h2 className="text-lg font-black text-white">🔄 النشر الدوري المتسلسل عبر تليجرام</h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              أرسل حتى 5 رسائل بالتناوب (Round-Robin) إلى قنوات ومجموعات محددة كل عدة دقائق لضمان التنويع ومنع كشف التكرار.
+            <h3 className="font-bold text-base">النشر الدوري المتسلسل (Rotating Auto-Poster)</h3>
+            <p className="text-xs text-emerald-100 opacity-90">
+              تدوير 5 رسائل بالتناوب لمنع اكتشاف التكرار والنشر الذكي كل فترة محددة
             </p>
           </div>
         </div>
-
-        <div>
-          <span
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-black text-xs ${
-              status.active
-                ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/30 animate-pulse'
-                : 'bg-slate-800 text-slate-400 border border-slate-700'
-            }`}
-          >
-            ● {status.active ? 'النشر المتسلسل نشط ويعمل' : 'متوقف'}
-          </span>
-        </div>
+        <span className={`text-xs font-bold px-3 py-1 rounded-full border ${
+          status.active ? 'bg-emerald-950/60 border-emerald-400 text-emerald-200 animate-pulse' : 'bg-white/20 border-white/30 text-white'
+        }`}>
+          ● {status.active ? 'النشر نشط حالياً' : 'متوقف'}
+        </span>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left 2 Columns: Messages & Groups */}
-        <div className="lg:col-span-2 space-y-5">
-          
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
-            <label className="block text-sm font-bold text-slate-200">
-              📝 الرسائل المتسلسلة (حتى 5 رسائل تدور بالتناوب)
-            </label>
-
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Left Column: 5 Messages & Groups */}
+        <div className="lg:col-span-8 space-y-3">
+          {/* 5 Rotating Messages */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5 space-y-2.5">
+            <span className="text-xs font-bold text-zinc-200 block">
+              نصوص الرسائل الـ 5 (يتم إرسالها بالتناوب):
+            </span>
             {messages.map((msg, idx) => (
               <div key={idx} className="space-y-1">
-                <span className="text-xs font-semibold text-emerald-400 block">الرسالة رقم {idx + 1}:</span>
+                <span className="text-[11px] font-bold text-emerald-400">
+                  الرسالة {idx + 1} {status.current_index === idx && status.active ? '(الرسالة الحالية ▶️)' : ''}:
+                </span>
                 <textarea
                   rows={2}
                   value={msg}
                   onChange={(e) => handleMessageChange(idx, e.target.value)}
-                  placeholder={`أدخل النص التسويقي للرسالة ${idx + 1}...`}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-slate-100 font-medium leading-relaxed"
+                  placeholder={`نص الرسالة رقم ${idx + 1}...`}
+                  className="w-full bg-zinc-950 border border-zinc-700/80 rounded-lg p-2 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500 leading-relaxed font-sans"
                 />
               </div>
             ))}
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
-            <label className="block text-sm font-bold text-slate-200">
-              👥 قنوات ومجموعات ومعرفات تليجرام المستهدفة بالنشر الدوري
-            </label>
+          {/* Target Groups */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5 space-y-2">
+            <span className="text-xs font-bold text-zinc-200 block">
+              قائمة المجموعات والقنوات المستهدفة (معرّف أو رابط لكل سطر):
+            </span>
             <textarea
               rows={4}
               value={groups}
               onChange={(e) => setGroups(e.target.value)}
-              placeholder={`https://t.me/academic_services_group\n@academic_researches_sa\nhttps://t.me/+join_hash`}
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs font-mono text-slate-100 leading-relaxed"
+              placeholder="https://t.me/group1&#10;@group_username&#10;https://t.me/+join_hash"
+              className="w-full bg-zinc-950 border border-zinc-700/80 rounded-lg p-2.5 text-xs text-zinc-100 placeholder-zinc-600 font-mono focus:outline-none focus:border-emerald-500 text-left"
+              dir="ltr"
             />
           </div>
-
         </div>
 
-        {/* Right 1 Column: Interval Presets & Countdown Card */}
-        <div className="space-y-5">
-          
-          {/* Interval Configuration */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
-            <label className="block text-sm font-bold text-slate-200 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-emerald-400" />
-              الفترة الزمنية بين الإرسال (بالدقائق)
-            </label>
-
-            <input
-              type="number"
-              min="1"
-              value={intervalVal}
-              onChange={(e) => setIntervalVal(parseInt(e.target.value) || 1)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-center text-lg font-black text-emerald-400"
-            />
-
-            <div>
-              <span className="text-xs font-bold text-slate-400 block mb-2">اختيار سريع للفاصل:</span>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  { label: '30 ثانية', val: 0.5 },
-                  { label: 'دقيقة', val: 1 },
-                  { label: '5 دقائق', val: 5 },
-                  { label: '15 دقيقة', val: 15 },
-                  { label: '30 دقيقة', val: 30 },
-                  { label: 'ساعة', val: 60 },
-                  { label: '3 ساعات', val: 180 }
-                ].map((preset, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handlePresetClick(preset.val)}
-                    className="px-2.5 py-1 bg-slate-950 hover:bg-emerald-600/30 text-slate-300 border border-slate-800 rounded-lg text-xs font-bold transition-all"
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
+        {/* Right Column: Timing, Status & Actions */}
+        <div className="lg:col-span-4 space-y-3">
+          {/* Interval Setting */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5 space-y-2">
+            <span className="text-xs font-bold text-zinc-200 block">
+              الفترة الزمنية بين كل رسالة:
+            </span>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="1"
+                max="1440"
+                value={intervalVal}
+                onChange={(e) => setIntervalVal(Number(e.target.value) || 1)}
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-100 font-mono text-center font-bold focus:outline-none focus:border-emerald-500"
+              />
+              <span className="text-xs text-zinc-400">دقيقة</span>
             </div>
 
-            <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-xl p-3 text-center">
-              <span className="text-xs font-bold text-emerald-300">
-                سيتم الإرسال كل: <strong className="text-white font-mono">{intervalVal} دقيقة</strong>
-              </span>
+            <div className="flex gap-1.5 pt-1">
+              {[5, 15, 30, 60].map((mins) => (
+                <button
+                  key={mins}
+                  type="button"
+                  onClick={() => setIntervalVal(mins)}
+                  className={`flex-1 py-1 text-[11px] font-bold rounded border transition-colors ${
+                    intervalVal === mins
+                      ? 'bg-emerald-600 text-white border-emerald-500'
+                      : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                  }`}
+                >
+                  {mins} د
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Countdown Display Card */}
-          {status.active && (
-            <div className="bg-slate-900 border border-emerald-500/40 rounded-2xl p-5 shadow-xl text-center space-y-3">
-              <div className="flex items-center justify-center gap-2 text-emerald-400 font-bold text-xs">
-                <Hourglass className="w-4 h-4 animate-spin" />
-                الإرسال القادم خلال:
+          {/* Status Details Card */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5 space-y-3">
+            <span className="text-xs font-bold text-zinc-200 block">
+              حالة النشر الدوري:
+            </span>
+
+            {status.active && countdown > 0 && (
+              <div className="bg-zinc-950 border border-emerald-500/30 rounded-lg p-3 text-center space-y-1">
+                <span className="text-[11px] text-zinc-400 block">الوقت المتبقي للإرسال القادم:</span>
+                <span className="text-2xl font-black text-emerald-400 font-mono">{formatCountdown(countdown)}</span>
               </div>
-              <div className="text-4xl font-black font-mono text-emerald-300 tracking-wider">
-                {formatCountdown(countdown)}
+            )}
+
+            <div className="divide-y divide-zinc-800 text-xs">
+              <div className="py-2 flex justify-between">
+                <span className="text-zinc-400">الرسائل النشطة:</span>
+                <span className="font-bold text-zinc-200 font-mono">
+                  {messages.filter((m) => m.trim()).length} / 5
+                </span>
               </div>
-              <div className="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800">
-                <div
-                  className="bg-emerald-500 h-full rounded-full transition-all duration-500"
-                  style={{ width: `${progressPercent}%` }}
-                />
+              <div className="py-2 flex justify-between">
+                <span className="text-zinc-400">المجموعات المحددة:</span>
+                <span className="font-bold text-zinc-200 font-mono">
+                  {groups.split('\n').filter(Boolean).length}
+                </span>
+              </div>
+              <div className="py-2 flex justify-between">
+                <span className="text-zinc-400">آخر إرسال:</span>
+                <span className="text-zinc-300 font-mono text-[11px]">
+                  {status.last_run || 'لم يبدأ بعد'}
+                </span>
               </div>
             </div>
-          )}
+          </div>
 
-          {/* Control Buttons */}
-          <div className="space-y-2 pt-2">
+          {/* Action Buttons */}
+          <div className="space-y-2 pt-1">
             <button
               onClick={handleSaveClick}
-              className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold text-xs rounded-xl border border-slate-700 flex items-center justify-center gap-2 transition-all"
+              className="w-full flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold py-2 px-3 rounded-xl border border-zinc-700 text-xs transition-colors"
             >
-              <Save className="w-4 h-4" />
-              حفظ الإعدادات
+              <Save className="w-3.5 h-3.5" />
+              <span>حفظ إعدادات النشر</span>
             </button>
 
-            <button
-              onClick={onStart}
-              disabled={status.active}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-            >
-              <Play className="w-4 h-4 fill-white" />
-              بدء النشر الدوري المتسلسل
-            </button>
-
-            {status.active && (
+            {!status.active ? (
+              <button
+                onClick={onStart}
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-bold py-2.5 px-4 rounded-xl shadow-md text-xs transition-all"
+              >
+                <Play className="w-3.5 h-3.5" />
+                <span>بدء النشر الدوري</span>
+              </button>
+            ) : (
               <button
                 onClick={onStop}
-                className="w-full py-3 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all"
+                className="w-full flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 px-4 rounded-xl shadow-md text-xs transition-colors"
               >
-                <Square className="w-4 h-4 fill-white" />
-                إيقاف النشر المتسلسل
+                <Square className="w-3.5 h-3.5" />
+                <span>إيقاف النشر الدوري</span>
               </button>
             )}
           </div>
-
         </div>
-
       </div>
-
     </div>
   );
 };

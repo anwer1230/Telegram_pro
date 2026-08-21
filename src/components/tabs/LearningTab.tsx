@@ -15,27 +15,27 @@ export const LearningTab: React.FC<LearningTabProps> = ({
   activeGroup,
   services,
   onToggleActive,
-  onGenerateAiResponse
+  onGenerateAiResponse,
 }) => {
   const [serviceName, setServiceName] = useState('');
   const [serviceDesc, setServiceDesc] = useState('');
   const [serviceKeywords, setServiceKeywords] = useState('');
   const [localServices, setLocalServices] = useState(services);
-  const [testMsg, setTestMsg] = useState('سلام عليكم كم تسوون بحث 10 صفحات؟');
+  const [testMsg, setTestMsg] = useState('سلام عليكم، كم تسوون بحث 10 صفحات باللغة العربية؟');
   const [aiResult, setAiResult] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
 
   const handleAddService = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!serviceName || !serviceDesc) return;
+    if (!serviceName.trim() || !serviceDesc.trim()) return;
     setLocalServices((prev) => ({
       ...prev,
-      [serviceName]: {
-        description: serviceDesc,
+      [serviceName.trim()]: {
+        description: serviceDesc.trim(),
         keywords: serviceKeywords.split(',').map((k) => k.trim()).filter(Boolean),
         price_range: 'حسب المطلوب',
-        time_range: 'تسليم سريع'
-      }
+        time_range: 'تسليم سريع',
+      },
     }));
     setServiceName('');
     setServiceDesc('');
@@ -43,7 +43,7 @@ export const LearningTab: React.FC<LearningTabProps> = ({
   };
 
   const handleTestAi = async () => {
-    if (!testMsg) return;
+    if (!testMsg.trim()) return;
     setIsGenerating(true);
     const reply = await onGenerateAiResponse(testMsg, 'أحمد');
     setAiResult(reply);
@@ -51,171 +51,160 @@ export const LearningTab: React.FC<LearningTabProps> = ({
   };
 
   return (
-    <div className="space-y-6">
-      
-      {/* Top Banner */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+    <div className="space-y-4 text-right" dir="rtl">
+      {/* Header Banner */}
+      <div className="rounded-xl p-4 text-white bg-gradient-to-r from-purple-700 via-indigo-600 to-blue-600 shadow-md flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-purple-500/20 rounded-xl text-purple-400 border border-purple-500/30">
-            <Brain className="w-6 h-6" />
+          <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center text-xl shadow-inner">
+            <i className="fas fa-brain text-white" />
           </div>
           <div>
-            <h2 className="text-lg font-black text-white">🧠 نظام التعلم والرد الذكي لتليجرام (Gemini AI + Telegram)</h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              بوت خدمي ذكي يتعلم أسلوب الرد باللهجة الخليجية، يتعرف على الخدمات المطلوبة ويزود عملاء وطلاب قنوات ومجموعات تليجرام بالتفاصيل والردود البشرية.
+            <h3 className="font-bold text-base">نظام التعلم الذكي والمحادثة (Smart AI Learning)</h3>
+            <p className="text-xs text-purple-100 opacity-90">
+              تدريب الذكاء الاصطناعي على فهم خدماتك والرد التلقائي البشري والذكي باللهجة المناسبة
             </p>
           </div>
         </div>
+        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-white/20 border border-white/30">
+          Gemini Pro Engine
+        </span>
       </div>
 
-      {/* Activation Switches Card */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl grid grid-cols-1 sm:grid-cols-2 gap-4">
-        
-        <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+      {/* Activation Toggles */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5 flex items-center justify-between">
           <div>
-            <h4 className="text-xs font-bold text-slate-200">💬 المحادثات الخاصة (Private Telegram)</h4>
-            <span className="text-[10px] text-slate-400">تفعيل البوت للرد التلقائي على الرسائل الفردية</span>
+            <span className="text-xs font-bold text-zinc-200 block">💬 المحادثات الخاصة (Private Chat)</span>
+            <span className="text-[11px] text-zinc-400">الرد التلقائي الذكي على الرسائل الفردية</span>
           </div>
           <button
             onClick={() => onToggleActive('private', !activePrivate)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              activePrivate ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400'
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+              activePrivate
+                ? 'bg-emerald-600 text-white shadow'
+                : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
             }`}
           >
-            {activePrivate ? 'مفعل ✅' : 'معطل 🚫'}
+            {activePrivate ? 'مفعل 🟢' : 'معطل 🔴'}
           </button>
         </div>
 
-        <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5 flex items-center justify-between">
           <div>
-            <h4 className="text-xs font-bold text-slate-200">👥 المجموعات والقنوات (Telegram Groups & Channels)</h4>
-            <span className="text-[10px] text-slate-400">تفعيل البوت للرد التلقائي داخل قنوات ومجموعات تليجرام</span>
+            <span className="text-xs font-bold text-zinc-200 block">👥 المجموعات والقنوات (Groups & Channels)</span>
+            <span className="text-[11px] text-zinc-400">الرد الذكي عند الإشارة أو استفسار الأعضاء</span>
           </div>
           <button
             onClick={() => onToggleActive('group', !activeGroup)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              activeGroup ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400'
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+              activeGroup
+                ? 'bg-emerald-600 text-white shadow'
+                : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
             }`}
           >
-            {activeGroup ? 'مفعل ✅' : 'معطل 🚫'}
+            {activeGroup ? 'مفعل 🟢' : 'معطل 🔴'}
           </button>
         </div>
-
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left Form & Services List */}
-        <div className="lg:col-span-2 space-y-5">
-          
-          {/* Add Service Form */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
-            <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-              <Plus className="w-4 h-4 text-purple-400" />
-              إضافة خدمة جديدة لمعرفة البوت الذكي
-            </h3>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Left Form: Add Knowledge / Service */}
+        <div className="lg:col-span-6 bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+          <span className="text-xs font-bold text-zinc-200 block flex items-center gap-1.5">
+            <Plus className="w-4 h-4 text-purple-400" />
+            <span>إضافة خدمة جديدة لمعرفة البوت:</span>
+          </span>
 
-            <form onSubmit={handleAddService} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <form onSubmit={handleAddService} className="space-y-2.5">
+            <div>
+              <label className="text-xs font-bold text-zinc-300 block mb-1">اسم الخدمة أو المادة:</label>
               <input
                 type="text"
                 required
                 value={serviceName}
                 onChange={(e) => setServiceName(e.target.value)}
-                placeholder="اسم الخدمة (مثل: ترجمة)"
-                className="bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white"
+                placeholder="مثال: بحوث تخرج، تحليلات إحصائية، ترجمة"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-purple-500"
               />
-              <input
-                type="text"
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-zinc-300 block mb-1">تفاصيل وشروط تقديم الخدمة:</label>
+              <textarea
+                rows={3}
                 required
                 value={serviceDesc}
                 onChange={(e) => setServiceDesc(e.target.value)}
-                placeholder="وصف الخدمة وشروطها"
-                className="bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white sm:col-span-2"
+                placeholder="مثال: نقوم بإعداد البحوث الأكاديمية بنسبة أصالة 100% مع التوثيق الكامل APA7"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-2.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-purple-500 leading-relaxed font-sans"
               />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-zinc-300 block mb-1">الكلمات الدالة (مفصولة بفاصلة):</label>
               <input
                 type="text"
                 value={serviceKeywords}
                 onChange={(e) => setServiceKeywords(e.target.value)}
-                placeholder="كلمات مفتاحية مفصولة بفاصلة (ترجمة, نصوص, لغة)"
-                className="bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white sm:col-span-2"
-              />
-              <button
-                type="submit"
-                className="py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl shadow-md transition-all"
-              >
-                إضافة الخدمة ➕
-              </button>
-            </form>
-          </div>
-
-          {/* Registered Services Grid */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
-            <h3 className="text-sm font-bold text-slate-200">
-              📚 الخدمات الأكاديمية المسجلة في القاموس ({Object.keys(localServices).length})
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {Object.entries(localServices).map(([key, serviceVal]) => {
-                const srv = serviceVal as LearningService;
-                return (
-                  <div key={key} className="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-1">
-                    <span className="font-bold text-purple-400 text-xs block">{key}</span>
-                    <p className="text-[11px] text-slate-300">{srv.description}</p>
-                    <div className="flex flex-wrap gap-1 pt-1">
-                      {(srv.keywords || []).map((kw, i) => (
-                        <span key={i} className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-mono">
-                          {kw}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-        </div>
-
-        {/* Right 1 Column: Instant Gemini AI Response Tester */}
-        <div className="space-y-5">
-          
-          <div className="bg-slate-900 border border-purple-500/30 rounded-2xl p-5 shadow-xl space-y-4">
-            <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-purple-400" />
-              اختبار الرد الذكي المباشر (Gemini AI)
-            </h3>
-
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-400">رسالة واصلة من عميل تليجرام:</label>
-              <textarea
-                rows={3}
-                value={testMsg}
-                onChange={(e) => setTestMsg(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white"
+                placeholder="بحث, تخرج, ماجستير, دكتوراه, استبانة"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-purple-500"
               />
             </div>
 
             <button
-              onClick={handleTestAi}
-              disabled={isGenerating}
-              className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              type="submit"
+              className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
             >
-              <Bot className="w-4 h-4" />
-              {isGenerating ? 'جارِ التوليد والتحليل...' : 'توليد رد ذكي كأنك إنسان حقيقي 🚀'}
+              <i className="fas fa-plus text-xs" />
+              <span>إضافة الخدمة لذاكرة البوت</span>
             </button>
-
-            {aiResult && (
-              <div className="bg-purple-950/40 border border-purple-500/30 rounded-xl p-4 space-y-1">
-                <span className="text-[10px] font-bold text-purple-300 block">الرد المقترح:</span>
-                <p className="text-xs text-white font-medium leading-relaxed">{aiResult}</p>
-              </div>
-            )}
-          </div>
-
+          </form>
         </div>
 
-      </div>
+        {/* Right Section: Test AI Prompt */}
+        <div className="lg:col-span-6 bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+          <span className="text-xs font-bold text-zinc-200 block flex items-center gap-1.5">
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            <span>تجربة واختبار أسلوب الرد الذكي:</span>
+          </span>
 
+          <div className="space-y-2">
+            <textarea
+              rows={2}
+              value={testMsg}
+              onChange={(e) => setTestMsg(e.target.value)}
+              placeholder="اكتب رسالة تجريبية لتجربة استجابة البوت الذكي..."
+              className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-2.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-purple-500 leading-relaxed font-sans"
+            />
+
+            <button
+              type="button"
+              onClick={handleTestAi}
+              disabled={isGenerating || !testMsg.trim()}
+              className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-purple-300 border border-purple-500/30 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+            >
+              {isGenerating ? (
+                <>
+                  <i className="fas fa-spinner fa-spin text-xs" />
+                  <span>جاري التفكير والتوليد...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>توليد واختبار الرد الذكي ⚡</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {aiResult && (
+            <div className="bg-zinc-950 border border-purple-500/40 rounded-xl p-3 space-y-1">
+              <span className="text-[11px] font-bold text-purple-300 block">رد البوت الذكي:</span>
+              <p className="text-xs text-zinc-200 leading-relaxed font-sans">{aiResult}</p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

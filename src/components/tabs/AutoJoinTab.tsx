@@ -1,5 +1,18 @@
 import React, { useState } from 'react';
-import { Zap, Play, Pause, Square, RotateCcw, CheckCircle2, AlertCircle, Info, ExternalLink } from 'lucide-react';
+import {
+  Zap,
+  Play,
+  Pause,
+  Square,
+  LogOut,
+  RotateCcw,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  ExternalLink,
+  Shield,
+  Layers
+} from 'lucide-react';
 import { AutoJoinItem, AutoJoinProgressEvent } from '../../types';
 
 interface AutoJoinTabProps {
@@ -7,8 +20,8 @@ interface AutoJoinTabProps {
     links: string;
     delay: number;
     max_retries: number;
-    fetch_external: boolean;
-    search_by_name: boolean;
+    fetch_external?: boolean;
+    search_by_name?: boolean;
   }) => Promise<void>;
   onStopAutoJoin: () => Promise<void>;
   onPauseAutoJoin: () => Promise<void>;
@@ -19,15 +32,13 @@ export const AutoJoinTab: React.FC<AutoJoinTabProps> = ({
   onStartAutoJoin,
   onStopAutoJoin,
   onPauseAutoJoin,
-  progressEvent
+  progressEvent,
 }) => {
   const [linksText, setLinksText] = useState(
-    `https://t.me/academic_services_group\nhttps://t.me/university_students_ksa\nhttps://t.me/+AbCdEfGhIjKlMnOp\n@academic_researches_sa\n@graduation_projects_help`
+    `https://t.me/group1\nhttps://t.me/+invite_link_hash\n@channel_username`
   );
   const [delay, setDelay] = useState(3);
   const [maxRetries, setMaxRetries] = useState(3);
-  const [fetchExternal, setFetchExternal] = useState(true);
-  const [searchByName, setSearchByName] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
 
@@ -38,202 +49,219 @@ export const AutoJoinTab: React.FC<AutoJoinTabProps> = ({
       links: linksText,
       delay,
       max_retries: maxRetries,
-      fetch_external: fetchExternal,
-      search_by_name: searchByName
     });
+  };
+
+  const handlePause = async () => {
+    await onPauseAutoJoin();
+    setIsPaused(true);
+  };
+
+  const handleResume = async () => {
+    await onPauseAutoJoin();
+    setIsPaused(false);
   };
 
   const handleStop = async () => {
     await onStopAutoJoin();
     setIsRunning(false);
-  };
-
-  const handlePauseToggle = async () => {
-    await onPauseAutoJoin();
-    setIsPaused(!isPaused);
+    setIsPaused(false);
   };
 
   const counts = progressEvent?.counts || { success: 0, fail: 0, already: 0, done: 0, total: 0 };
   const percent = counts.total > 0 ? Math.round((counts.done / counts.total) * 100) : 0;
 
   return (
-    <div className="space-y-6">
-      
-      {/* Top Banner Notice */}
-      <div className="bg-sky-950/50 border border-sky-500/30 rounded-2xl p-5 shadow-xl flex items-start gap-4">
-        <div className="p-3 bg-sky-500/20 rounded-2xl text-sky-400 shrink-0 border border-sky-500/30">
-          <Zap className="w-7 h-7" />
+    <div className="space-y-4 text-right" dir="rtl">
+      {/* Header Banner */}
+      <div className="rounded-xl p-4 text-white bg-gradient-to-r from-red-700 via-rose-600 to-pink-600 shadow-md flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center text-xl shadow-inner">
+            <i className="fas fa-bolt text-white" />
+          </div>
+          <div>
+            <h3 className="font-bold text-base">الانضمام التلقائي المتقدم (Auto Join Advanced)</h3>
+            <p className="text-xs text-rose-100 opacity-90">
+              انضمام فوري وآمن للمجموعات والقنوات مع تجاوز المجموعات المقفلة وتفادي حظر التليجرام
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-lg font-black text-white">⚡ الانضمام التلقائي المتقدم لقنوات ومجموعات تليجرام</h2>
-          <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-            ضع قائمة الروابط الإلكترونية لمجموعات وقنوات تليجرام (`t.me` أو `telegram.me`) أو معرفات `@username`. سينضم البوت تلقائياً عبر بروتوكول MTProto مع تجاوز المجموعات المكررة.
-          </p>
-        </div>
+        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-white/20 border border-white/30">
+          MTProto FloodSafe
+        </span>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left 2 Columns: Input & Controls */}
-        <div className="lg:col-span-2 space-y-5">
-          
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
-            <label className="block text-sm font-bold text-slate-200">
-              📋 روابط ومعرفات القنوات والمجموعات (سطر لكل رابط/معرف)
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Left Inputs Section */}
+        <div className="lg:col-span-8 space-y-3">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5 space-y-2">
+            <label className="block text-xs font-bold text-zinc-200">
+              روابط المجموعات (سطر لكل رابط):
             </label>
             <textarea
-              rows={8}
+              rows={7}
               value={linksText}
               onChange={(e) => setLinksText(e.target.value)}
-              placeholder={`https://t.me/group_name\n@channel_username\nhttps://t.me/+join_hash\nأو الصق مقالاً يحتوي على معرفات تليجرام...`}
-              className="w-full bg-slate-950 border border-slate-700/80 rounded-xl p-4 text-xs font-mono text-slate-100 focus:outline-none focus:border-sky-500 leading-relaxed"
+              placeholder="https://t.me/group1&#10;https://t.me/+invite&#10;@channel"
+              className="w-full bg-zinc-950 border border-zinc-700/80 rounded-lg p-3 text-xs font-mono text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-rose-500 leading-relaxed text-left"
+              dir="ltr"
             />
           </div>
 
-          {/* Advanced Switches & Config */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl grid grid-cols-1 sm:grid-cols-2 gap-4">
-            
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-300 block">التأخير بين الانضمام (ثواني)</label>
-              <input
-                type="number"
-                min="1"
-                value={delay}
-                onChange={(e) => setDelay(parseInt(e.target.value) || 1)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-300 block">إعادة المحاولة عند الفشل</label>
-              <input
-                type="number"
-                min="1"
-                value={maxRetries}
-                onChange={(e) => setMaxRetries(parseInt(e.target.value) || 1)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white"
-              />
-            </div>
-
-            <div className="sm:col-span-2 space-y-2 pt-2 border-t border-slate-800">
-              <label className="flex items-center gap-2.5 text-xs font-bold text-slate-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={fetchExternal}
-                  onChange={(e) => setFetchExternal(e.target.checked)}
-                  className="rounded border-slate-700 text-rose-500 focus:ring-rose-500 bg-slate-950"
-                />
-                جلب الروابط تلقائياً من الصفحات والمواقع الخارجية المذكورة في النص
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-1.5">
+              <label className="block text-xs font-bold text-zinc-300">
+                التأخير بين كل انضمام (ثواني):
               </label>
-
-              <label className="flex items-center gap-2.5 text-xs font-bold text-slate-300 cursor-pointer">
+              <div className="flex items-center gap-2">
                 <input
-                  type="checkbox"
-                  checked={searchByName}
-                  onChange={(e) => setSearchByName(e.target.checked)}
-                  className="rounded border-slate-700 text-rose-500 focus:ring-rose-500 bg-slate-950"
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={delay}
+                  onChange={(e) => setDelay(Number(e.target.value) || 1)}
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-100 font-mono text-center font-bold focus:outline-none focus:border-rose-500"
                 />
-                البحث عن المجموعات بأسمائها إذا لم تكن الروابط المباشرة متوفرة
-              </label>
+                <span className="text-xs text-zinc-400 font-medium">ثواني</span>
+              </div>
             </div>
 
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-1.5">
+              <label className="block text-xs font-bold text-zinc-300">
+                إعادة المحاولة عند تعذر الوصول:
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={maxRetries}
+                  onChange={(e) => setMaxRetries(Number(e.target.value) || 1)}
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-100 font-mono text-center font-bold focus:outline-none focus:border-rose-500"
+                />
+                <span className="text-xs text-zinc-400 font-medium">مرات</span>
+              </div>
+            </div>
           </div>
 
-          {/* Action Buttons Row */}
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={handleStart}
-              disabled={isRunning && !isPaused}
-              className="flex-1 min-w-[140px] flex items-center justify-center gap-2 py-3 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-xl shadow-lg shadow-rose-900/40 transition-all active:scale-95 disabled:opacity-50"
-            >
-              <Play className="w-4 h-4 fill-white" />
-              بدء الانضمام المتقدم
-            </button>
-
-            {isRunning && (
+          {/* Action Control Buttons */}
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            {!isRunning ? (
+              <button
+                onClick={handleStart}
+                disabled={!linksText.trim()}
+                className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold py-2.5 px-4 rounded-xl shadow-md transition-all text-xs disabled:opacity-50"
+              >
+                <i className="fas fa-bolt text-xs" />
+                <span>بدء الانضمام المتقدم</span>
+              </button>
+            ) : (
               <>
+                {!isPaused ? (
+                  <button
+                    onClick={handlePause}
+                    className="flex items-center justify-center gap-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 px-3 rounded-xl text-xs transition-colors"
+                    title="إيقاف مؤقت — تبقى الإعدادات"
+                  >
+                    <i className="fas fa-pause text-xs" />
+                    <span>إيقاف مؤقت</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleResume}
+                    className="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-3 rounded-xl text-xs transition-colors"
+                    title="استئناف من حيث توقف"
+                  >
+                    <i className="fas fa-play text-xs" />
+                    <span>استئناف</span>
+                  </button>
+                )}
+
                 <button
-                  onClick={handlePauseToggle}
-                  className="flex-1 min-w-[120px] flex items-center justify-center gap-2 py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all"
+                  onClick={handleStop}
+                  className="flex items-center justify-center gap-1.5 bg-zinc-700 hover:bg-zinc-600 text-white font-bold py-2 px-3 rounded-xl text-xs transition-colors"
+                  title="إيقاف نهائي"
                 >
-                  {isPaused ? <Play className="w-4 h-4 fill-slate-950" /> : <Pause className="w-4 h-4 fill-slate-950" />}
-                  {isPaused ? 'استئناف' : 'إيقاف مؤقت'}
+                  <i className="fas fa-stop-circle text-xs" />
+                  <span>إيقاف</span>
                 </button>
 
                 <button
                   onClick={handleStop}
-                  className="flex-1 min-w-[120px] flex items-center justify-center gap-2 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 transition-all"
+                  className="flex items-center justify-center gap-1.5 border border-red-500/50 text-red-400 hover:bg-red-500/10 font-bold py-2 px-3 rounded-xl text-xs transition-colors"
+                  title="خروج يدوي"
                 >
-                  <Square className="w-4 h-4 fill-slate-200" />
-                  إيقاف كامل
+                  <i className="fas fa-sign-out-alt text-xs" />
+                  <span>خروج يدوي</span>
                 </button>
               </>
             )}
           </div>
-
         </div>
 
-        {/* Right 1 Column: Stats Counter & Live Progress */}
-        <div className="space-y-5">
-          
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
-            <h3 className="text-sm font-bold text-slate-200 flex items-center justify-between">
-              <span>📊 تقدم عملية الانضمام</span>
-              <span className="text-xs font-mono text-rose-400 font-bold">{counts.done} / {counts.total}</span>
-            </h3>
+        {/* Right Status & Statistics Section */}
+        <div className="lg:col-span-4 space-y-3">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5 space-y-3">
+            <h4 className="text-xs font-bold text-zinc-200 flex items-center justify-between">
+              <span>تقرير حالة الانضمام:</span>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                isRunning ? (isPaused ? 'bg-amber-500/20 text-amber-300' : 'bg-emerald-500/20 text-emerald-300') : 'bg-zinc-800 text-zinc-400'
+              }`}>
+                {isRunning ? (isPaused ? '⏸️ متوقف مؤقتاً' : '⚡ جاري العمل...') : 'جاهز'}
+              </span>
+            </h4>
 
             {/* Progress Bar */}
-            <div className="space-y-1.5">
-              <div className="w-full bg-slate-950 rounded-full h-4 p-0.5 overflow-hidden border border-slate-800">
+            <div className="space-y-1">
+              <div className="flex justify-between text-[11px] font-mono text-zinc-400">
+                <span>التقدم الإجمالي:</span>
+                <span className="font-bold text-zinc-200">{percent}%</span>
+              </div>
+              <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
                 <div
-                  className="bg-gradient-to-r from-rose-600 to-amber-500 h-full rounded-full transition-all duration-300 font-mono text-[10px] text-white font-black flex items-center justify-center"
+                  className="h-full bg-gradient-to-r from-red-500 to-rose-500 rounded-full transition-all duration-300"
                   style={{ width: `${percent}%` }}
-                >
-                  {percent > 10 ? `${percent}%` : ''}
+                />
+              </div>
+            </div>
+
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-center">
+                <span className="text-[10px] text-zinc-400 block">ناجح</span>
+                <span className="text-sm font-bold text-emerald-400 font-mono">{counts.success}</span>
+              </div>
+              <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-center">
+                <span className="text-[10px] text-zinc-400 block">مكرر / منضم سابقاً</span>
+                <span className="text-sm font-bold text-sky-400 font-mono">{counts.already}</span>
+              </div>
+              <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-center">
+                <span className="text-[10px] text-zinc-400 block">فشل / مقفلة</span>
+                <span className="text-sm font-bold text-rose-400 font-mono">{counts.fail}</span>
+              </div>
+              <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-center">
+                <span className="text-[10px] text-zinc-400 block">إجمالي الروابط</span>
+                <span className="text-sm font-bold text-zinc-200 font-mono">{counts.total}</span>
+              </div>
+            </div>
+
+            {/* Live Current Link Status */}
+            {progressEvent?.url && (
+              <div className="bg-zinc-950 border border-zinc-800/80 rounded-lg p-2 text-[11px] space-y-1">
+                <span className="text-zinc-500 block">الرابط الحالي:</span>
+                <div className="font-mono text-zinc-300 truncate" dir="ltr">
+                  {progressEvent.url}
                 </div>
+                {progressEvent.reason && (
+                  <span className="text-xs text-amber-400 block font-semibold">
+                    {progressEvent.reason}
+                  </span>
+                )}
               </div>
-            </div>
-
-            {/* 4 Counter Boxes */}
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-xl p-3 text-center">
-                <span className="text-xl font-black text-emerald-400 block">{counts.success}</span>
-                <span className="text-[11px] font-bold text-emerald-300">✅ تم الانضمام</span>
-              </div>
-
-              <div className="bg-blue-950/40 border border-blue-500/30 rounded-xl p-3 text-center">
-                <span className="text-xl font-black text-blue-400 block">{counts.already}</span>
-                <span className="text-[11px] font-bold text-blue-300">📌 منضم مسبقاً</span>
-              </div>
-
-              <div className="bg-rose-950/40 border border-rose-500/30 rounded-xl p-3 text-center">
-                <span className="text-xl font-black text-rose-400 block">{counts.fail}</span>
-                <span className="text-[11px] font-bold text-rose-300">❌ فشل الانضمام</span>
-              </div>
-
-              <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 text-center">
-                <span className="text-xl font-black text-slate-300 block">{counts.total}</span>
-                <span className="text-[11px] font-bold text-slate-400">📋 المجموع الكلي</span>
-              </div>
-            </div>
-
+            )}
           </div>
-
-          {/* Live Progress Item Box */}
-          {progressEvent && (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-2">
-              <span className="text-xs font-bold text-slate-400 block">آخر إجراء:</span>
-              <div className="bg-slate-950 rounded-xl p-3 border border-slate-800 text-xs space-y-1">
-                <p className="font-mono text-emerald-400 font-bold truncate">{progressEvent.url}</p>
-                <p className="text-slate-300 font-semibold">{progressEvent.reason}</p>
-              </div>
-            </div>
-          )}
-
         </div>
-
       </div>
-
     </div>
   );
 };
