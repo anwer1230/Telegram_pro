@@ -701,7 +701,7 @@ export const MessageList: React.FC<MessageListProps> = ({
                         <div className="flex items-center gap-1 text-slate-300/80" title="جاري الإرسال (قيد الانتظار)">
                           <Clock className="w-3 h-3 text-sky-200 animate-spin shrink-0" />
                         </div>
-                      ) : msg.status === 'sent' ? (
+                      ) : msg.status === 'sent' || (localStorage.getItem('tg_read_receipts') === 'false') ? (
                         <div className="flex items-center" title="تم الإرسال (✓)">
                           <Check className="w-3.5 h-3.5 text-slate-200/90" />
                         </div>

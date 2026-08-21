@@ -122,6 +122,7 @@ export interface AppSettings {
   soundEffects: boolean;
   animations: boolean;
   sendOnEnter: boolean;
+  readReceipts?: boolean;
   wallpaper: string;
   activeLanguage: string;
 }

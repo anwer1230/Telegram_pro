@@ -11,6 +11,7 @@ import {
   Moon,
   X,
   Check,
+  CheckCheck,
   Smartphone,
   Lock,
   KeyRound,
@@ -73,6 +74,8 @@ interface SettingsModalProps {
   onToggleTheme?: () => void;
   defaultHistoryTTL?: number;
   onUpdateDefaultTTL?: (ttlInSeconds: number) => Promise<void> | void;
+  readReceipts?: boolean;
+  onToggleReadReceipts?: (enabled: boolean) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -85,6 +88,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onToggleTheme,
   defaultHistoryTTL,
   onUpdateDefaultTTL,
+  readReceipts: propReadReceipts,
+  onToggleReadReceipts,
 }) => {
   // Screen navigation state: Starts at clean Telegram Overview menu by default
   const [activeScreen, setActiveScreen] = useState<SettingsTabType>('overview');
@@ -109,6 +114,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   });
   const [sendByEnter, setSendByEnter] = useState<boolean>(() => localStorage.getItem('tg_chat_enter_send') !== 'false');
   const [chatAnimations, setChatAnimations] = useState<boolean>(() => localStorage.getItem('tg_chat_anim') !== 'false');
+  const [readReceipts, setReadReceipts] = useState<boolean>(() => {
+    if (propReadReceipts !== undefined) return propReadReceipts;
+    return localStorage.getItem('tg_read_receipts') !== 'false';
+  });
+
+  useEffect(() => {
+    if (propReadReceipts !== undefined) {
+      setReadReceipts(propReadReceipts);
+    }
+  }, [propReadReceipts]);
 
   // 3. Notifications State
   const [browserNotifications, setBrowserNotifications] = useState(
@@ -218,6 +233,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   useEffect(() => {
     localStorage.setItem('tg_chat_anim', String(chatAnimations));
   }, [chatAnimations]);
+
+  useEffect(() => {
+    localStorage.setItem('tg_read_receipts', String(readReceipts));
+    window.dispatchEvent(new CustomEvent('tg_read_receipts_changed', { detail: { enabled: readReceipts } }));
+  }, [readReceipts]);
 
   useEffect(() => {
     localStorage.setItem('tg_pref_phone_privacy', phonePrivacy);
@@ -416,9 +436,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     {
       id: 'chat_settings' as const,
       title: 'إعدادات المحادثات',
-      subtitle: `حجم الخط (${fontSize} pt)، زوايا الفقاعات (${bubbleCorners} px)، وإرسال بـ Enter`,
+      subtitle: `حجم الخط (${fontSize} pt)، زوايا الفقاعات (${bubbleCorners} px)، ${readReceipts ? 'مؤشرات القراءة مفعلة ✓✓' : 'مؤشرات القراءة معطلة ✓'}`,
       icon: <MessageSquare className="w-5 h-5 text-indigo-400" />,
-      badge: `${fontSize} pt`,
+      badge: readReceipts ? `${fontSize} pt • ✓✓` : `${fontSize} pt • ✓`,
       badgeColor: 'bg-indigo-500/20 text-indigo-300',
     },
     {
@@ -737,25 +757,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {activeScreen === 'chat_settings' && (
             <div className="space-y-4 max-w-lg mx-auto">
               <div className="p-4 bg-zinc-900/90 border border-zinc-800 rounded-2xl space-y-3">
-                <span className="text-xs font-bold text-zinc-400 block">معاينة شكل الفقاعات والخط:</span>
+                <span className="text-xs font-bold text-zinc-400 block">معاينة شكل الفقاعات والخط وحالة القراءة:</span>
                 <div className="space-y-2 p-3 bg-zinc-950 rounded-xl border border-zinc-850">
                   <div
-                    className="bg-sky-600 text-white p-3 max-w-[80%] self-end mr-auto transition-all"
+                    className="bg-sky-600 text-white p-3 max-w-[85%] self-end mr-auto transition-all shadow-md flex flex-col gap-1"
                     style={{
                       fontSize: `${fontSize}px`,
                       borderRadius: `${bubbleCorners}px`,
                     }}
                   >
-                    مرحباً! هذه معاينة مباشرة لتخصيص حجم الخط وشكل الزوايا.
+                    <span>مرحباً! هذه معاينة مباشرة لحجم الخط والزوايا وعلامة القراءة الصادرة.</span>
+                    <div className="flex items-center justify-end gap-1 text-[11px] text-sky-100/90 self-end mt-0.5">
+                      <span>12:45 م</span>
+                      {readReceipts ? (
+                        <span className="flex items-center text-sky-200" title="تمت القراءة (✓✓)">
+                          <CheckCheck className="w-3.5 h-3.5 text-sky-200" />
+                        </span>
+                      ) : (
+                        <span className="flex items-center text-white/90" title="تم الإرسال (✓) - مؤشر القراءة مخفي">
+                          <Check className="w-3.5 h-3.5 text-white/90" />
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div
-                    className="bg-zinc-800 text-zinc-100 p-3 max-w-[80%] ml-auto transition-all"
+                    className="bg-zinc-800 text-zinc-100 p-3 max-w-[85%] ml-auto transition-all shadow-md"
                     style={{
                       fontSize: `${fontSize}px`,
                       borderRadius: `${bubbleCorners}px`,
                     }}
                   >
-                    تبدو ممتازة ومتناسقة للغاية!
+                    <span>تبدو واضحة ومتناسقة مع إعدادات الخصوصية!</span>
                   </div>
                 </div>
               </div>
@@ -793,6 +825,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onChange={(e) => setBubbleCorners(parseInt(e.target.value, 10))}
                   className="w-full accent-indigo-500 cursor-pointer"
                 />
+              </div>
+
+              {/* Read Receipts Toggle for Outgoing Messages */}
+              <div className="p-4 bg-zinc-900/60 border border-zinc-800 rounded-2xl space-y-2">
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div className="space-y-1">
+                    <div className="text-xs font-bold text-zinc-200 flex items-center gap-2">
+                      <span>مؤشرات قراءة الرسائل (Read Receipts)</span>
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded-md font-bold transition-colors ${
+                          readReceipts ? 'bg-sky-500/20 text-sky-300' : 'bg-zinc-800 text-zinc-400'
+                        }`}
+                      >
+                        {readReceipts ? 'مرئية (✓✓)' : 'مخفية (✓)'}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-zinc-400 leading-relaxed max-w-sm">
+                      إظهار علامات القراءة المزدوجة الزرقاء (✓✓) للرسائل الصادرة عند قراءتها من قِبل الطرف الآخر. عند التعطيل، تظل كعلامة صح واحدة عادية (✓) لحماية خصوصيتك وعدم كشف حالة قراءتك للآخرين.
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={readReceipts}
+                    onChange={(e) => {
+                      const val = e.target.checked;
+                      setReadReceipts(val);
+                      if (onToggleReadReceipts) onToggleReadReceipts(val);
+                    }}
+                    className="w-4 h-4 accent-sky-500 rounded cursor-pointer shrink-0 ml-2"
+                  />
+                </label>
               </div>
 
               <div className="p-4 bg-zinc-900/60 border border-zinc-800 rounded-2xl space-y-2">

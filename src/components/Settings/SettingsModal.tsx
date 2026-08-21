@@ -465,6 +465,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className="w-4 h-4 rounded text-sky-500 focus:ring-sky-500"
                   />
                 </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <div>
+                    <div className="font-medium text-neutral-200">Read Receipts (مؤشرات القراءة)</div>
+                    <div className="text-[10px] text-neutral-400">Show blue checkmarks (✓✓) on outgoing messages</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={settings.readReceipts !== false}
+                    onChange={(e) => {
+                      const val = e.target.checked;
+                      onUpdateSettings({ readReceipts: val });
+                      localStorage.setItem('tg_read_receipts', String(val));
+                      window.dispatchEvent(new CustomEvent('tg_read_receipts_changed', { detail: { enabled: val } }));
+                    }}
+                    className="w-4 h-4 rounded text-sky-500 focus:ring-sky-500"
+                  />
+                </div>
               </div>
             </div>
           )}

@@ -614,9 +614,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
           {isOutgoing && (
             <span className="inline-flex items-center ml-0.5">
-              {message.status === 'read' ? (
+              {message.status === 'read' && (localStorage.getItem('tg_read_receipts') !== 'false') ? (
                 <CheckCheck className="w-3.5 h-3.5 text-white" />
-              ) : message.status === 'sent' ? (
+              ) : message.status === 'sent' || (localStorage.getItem('tg_read_receipts') === 'false') ? (
                 <Check className="w-3.5 h-3.5 text-white/80" />
               ) : (
                 <Clock className="w-3 h-3 animate-spin" />

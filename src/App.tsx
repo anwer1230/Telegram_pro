@@ -790,6 +790,23 @@ export default function App() {
   });
   const [activeBottomNav, setActiveBottomNav] = useState<BottomNavTab>('chats');
   const [defaultHistoryTTL, setDefaultHistoryTTL] = useState<number>(() => mtprotoService.getDefaultHistoryTTL());
+  const [readReceiptsEnabled, setReadReceiptsEnabled] = useState<boolean>(() => localStorage.getItem('tg_read_receipts') !== 'false');
+
+  useEffect(() => {
+    const handleReadReceipts = (e: any) => {
+      if (e && e.detail && typeof e.detail.enabled === 'boolean') {
+        setReadReceiptsEnabled(e.detail.enabled);
+      } else {
+        setReadReceiptsEnabled(localStorage.getItem('tg_read_receipts') !== 'false');
+      }
+    };
+    window.addEventListener('tg_read_receipts_changed', handleReadReceipts);
+    window.addEventListener('storage', handleReadReceipts);
+    return () => {
+      window.removeEventListener('tg_read_receipts_changed', handleReadReceipts);
+      window.removeEventListener('storage', handleReadReceipts);
+    };
+  }, []);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
     typeof Notification !== 'undefined' ? Notification.permission : 'default'
   );
@@ -5320,12 +5337,12 @@ export default function App() {
                                   <span className="msg-time">{fmtMsgTime(m.date)}</span>
                                   {isOut && (
                                     <span
-                                      className={`msg-status ${m.status || 'read'}`}
+                                      className={`msg-status ${!readReceiptsEnabled && (m.status === 'read' || m.status === 'delivered') ? 'sent' : (m.status || 'read')}`}
                                       title={
                                         m.status === 'pending' || m.status === 'sending'
                                           ? (lang === 'ar' ? 'جاري الإرسال...' : 'Sending...')
-                                          : m.status === 'sent'
-                                          ? (lang === 'ar' ? 'تم الإرسال (علامة صح واحدة ✓)' : 'Sent (single checkmark ✓)')
+                                          : m.status === 'sent' || !readReceiptsEnabled
+                                          ? (lang === 'ar' ? 'تم الإرسال (علامة صح واحدة ✓ - مؤشرات القراءة مخفية)' : 'Sent (single checkmark ✓ - read receipts hidden)')
                                           : m.status === 'delivered'
                                           ? (lang === 'ar' ? 'تم التسليم (علامتا صح رمادية ✓✓)' : 'Delivered (double checkmark ✓✓)')
                                           : (lang === 'ar' ? 'تمت القراءة (علامتا صح زرقاء ✓✓)' : 'Read (blue double checkmark ✓✓)')
@@ -5333,7 +5350,7 @@ export default function App() {
                                     >
                                       {m.status === 'pending' || m.status === 'sending' ? (
                                         <i className="fas fa-clock check-icon check-pending" style={{ fontSize: '10px' }} />
-                                      ) : m.status === 'sent' ? (
+                                      ) : m.status === 'sent' || !readReceiptsEnabled ? (
                                         <i className="fas fa-check check-icon check-sent" style={{ fontSize: '11px', color: 'var(--delivered, #8D969D)' }} />
                                       ) : m.status === 'delivered' ? (
                                         <i className="fas fa-check-double check-icon check-delivered" style={{ fontSize: '12px', color: 'var(--delivered, #8D969D)' }} />
@@ -5798,6 +5815,8 @@ export default function App() {
         onToggleTheme={toggleTheme}
         defaultHistoryTTL={defaultHistoryTTL}
         onUpdateDefaultTTL={handleUpdateDefaultTTL}
+        readReceipts={readReceiptsEnabled}
+        onToggleReadReceipts={(enabled) => setReadReceiptsEnabled(enabled)}
         onUpdateProfile={(updated) => {
           setCurrentUser((prev: any) => ({
             ...prev,
