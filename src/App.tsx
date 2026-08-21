@@ -1615,12 +1615,12 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          chat_id: target ? target.id : 1002,
+          chat_id: target ? target.id : 1003,
           text: simType === 'group'
-            ? 'السلام عليكم، تم مراجعة واعتماد التقرير البحثي للأطروحة بنجاح 🎓✅'
+            ? 'السلام عليكم، تم مراجعة وتحديث الإعدادات بنجاح 🎓✅'
             : simType === 'channel'
             ? '🚀 تحديث رسمي: تم إطلاق ميزة المزامنة الفورية وقراءة الإشعارات عالية الدقة!'
-            : 'مرحباً يا أنور، تفضل بمراجعة الملف والمراجع المرفقة.',
+            : 'مرحباً، تم حفظ التحديثات في سحابة تليجرام بنجاح.',
         }),
       });
       const data = await res.json();
@@ -4618,7 +4618,7 @@ export default function App() {
                       type={c.type}
                       size="xl"
                       isOnline={c.type === 'private'}
-                      isVerified={c.id === 1001 || c.id === 1002 || c.id === 1003 || c.id === 1007}
+                      isVerified={c.id === 1001 || c.id === 1003 || !!(c as any)?.is_verified}
                     />
                   </div>
 
@@ -4771,7 +4771,7 @@ export default function App() {
                       type={currentChat?.type}
                       size="md"
                       isOnline={currentChat?.type === 'private'}
-                      isVerified={currentChat?.id === 1001 || currentChat?.id === 1002 || currentChat?.id === 1003 || currentChat?.id === 1007}
+                      isVerified={currentChat?.id === 1001 || currentChat?.id === 1003 || !!(currentChat as any)?.is_verified}
                     />
                   </div>
 

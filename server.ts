@@ -44,37 +44,7 @@ let profileStore: UserProfile = { ...initialUserProfile };
 let draftsStore: Record<string, string> = {};
 let pinnedMessagesStore: Record<string, { id: string | number; text: string; sender_name?: string }> = {};
 
-let batchesStore: any[] = [
-  {
-    id: 'batch_1739800001',
-    text: 'السلام عليكم ورحمة الله وبركاته.. يسر مركز سرعة إنجاز الأكاديمي تقديم خدمات التحليل الإحصائي وإعداد البحوث لطلاب الماجستير والدكتوراه 📚🎓',
-    has_media: false,
-    sent_at: '2026-08-16 14:30',
-    timestamp: '2026-08-16 14:30',
-    sent_count: 14,
-    group_count: 14,
-    groupsCount: 14,
-    entries: [
-      { chat_id: 1002, chat_title: 'مركز سرعة إنجاز الأكاديمي', status: 'success', sent_at: '2026-08-16 14:30' },
-      { chat_id: 1006, chat_title: 'مجموعة المطورين والتقنيين', status: 'success', sent_at: '2026-08-16 14:30' }
-    ],
-    groups: [{ title: 'مركز سرعة إنجاز الأكاديمي', username: '@SpeedEnjaz_Academic' }]
-  },
-  {
-    id: 'batch_1739800002',
-    text: '📢 إشعار هام لطلاب الجامعات: فتح باب التسجيل لورشة التدريب على إعداد عروض PowerPoint التفاعلية وتنسيق المستندات الأكاديمية.',
-    has_media: true,
-    sent_at: '2026-08-17 09:15',
-    timestamp: '2026-08-17 09:15',
-    sent_count: 18,
-    group_count: 18,
-    groupsCount: 18,
-    entries: [
-      { chat_id: 1002, chat_title: 'مركز سرعة إنجاز الأكاديمي', status: 'success', sent_at: '2026-08-17 09:15' }
-    ],
-    groups: [{ title: 'مركز سرعة إنجاز الأكاديمي', username: '@SpeedEnjaz_Academic' }]
-  }
-];
+let batchesStore: any[] = [];
 let automationState: any = {
   active_rotations: 0,
   monitored_keywords: 0,
@@ -569,12 +539,7 @@ app.post('/api/user/update-profile', async (req: Request, res: Response) => {
 });
 
 // Contacts In-memory fallback / cache
-let fallbackContacts = [
-  { id: 'c_1', name: 'أبو ملك (المشرف الأكاديمي)', first_name: 'أبو ملك', last_name: 'المشرف', phone: '+964 770 111 2233', username: '@abu_malak', status: 'online', status_text: 'متصل الآن', is_online: true },
-  { id: 'c_2', name: 'د. خالد عبد العزيز', first_name: 'خالد', last_name: 'عبد العزيز', phone: '+966 50 123 4567', username: '@dr_khaled', status: 'recently', status_text: 'آخر ظهور قريباً', is_online: false },
-  { id: 'c_3', name: 'م. سارة علي', first_name: 'سارة', last_name: 'علي', phone: '+964 780 444 5566', username: '@eng_sara', status: 'recently', status_text: 'آخر ظهور قريباً', is_online: false },
-  { id: 'c_4', name: 'أحمد التميمي', first_name: 'أحمد', last_name: 'التميمي', phone: '+964 750 999 8877', username: '@ahmed_tamimi', status: 'online', status_text: 'متصل الآن', is_online: true },
-];
+let fallbackContacts: any[] = [];
 
 app.get('/api/contacts', async (req: Request, res: Response) => {
   try {

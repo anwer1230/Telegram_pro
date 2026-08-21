@@ -1047,6 +1047,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </select>
                   </div>
                 </div>
+
+                <div className="pt-2 border-t border-zinc-800">
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <div className="space-y-0.5">
+                      <div className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+                        <span>مؤشرات قراءة الرسائل (Read Receipts)</span>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${readReceipts ? 'bg-sky-500/20 text-sky-300' : 'bg-zinc-800 text-zinc-400'}`}>
+                          {readReceipts ? 'مفعل (✓✓)' : 'معطل (✓)'}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-zinc-400">
+                        إخفاء علامات القراءة المزدوجة لحماية خصوصيتك عند فتح الرسائل
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={readReceipts}
+                      onChange={(e) => {
+                        const val = e.target.checked;
+                        setReadReceipts(val);
+                        if (onToggleReadReceipts) onToggleReadReceipts(val);
+                      }}
+                      className="w-4 h-4 accent-sky-500 rounded cursor-pointer"
+                    />
+                  </label>
+                </div>
               </div>
             </div>
           )}
