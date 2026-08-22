@@ -296,6 +296,8 @@ export function clearStorageCache(): void {
     localStorage.removeItem(CACHE_KEYS.LAST_SYNC);
     localStorage.removeItem(CACHE_KEYS.USER_PROFILE);
     localStorage.removeItem(CACHE_KEYS.DRAFTS);
+    localStorage.removeItem('tg_stories_list');
+    localStorage.removeItem('tg_session');
     console.log('[StorageCache] LocalStorage cache cleared successfully');
   } catch (e) {
     console.error('[StorageCache] Error clearing cache:', e);

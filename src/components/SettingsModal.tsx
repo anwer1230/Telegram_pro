@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { TelegramTheme } from '../org/telegram/messenger/AndroidUtilities';
 import {
   Settings,
   User as UserIcon,
@@ -220,6 +221,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   // Save changes to localStorage for persistent state across navigation
   useEffect(() => {
     localStorage.setItem('tg_chat_fontsize', String(fontSize));
+    TelegramTheme.setFontSize(fontSize);
   }, [fontSize]);
 
   useEffect(() => {

@@ -26,6 +26,8 @@ interface MessageInputProps {
   onCancelReplyOrEdit: () => void;
   onOpenPollModal: () => void;
   isBot?: boolean;
+  isRestricted?: boolean;
+  restrictionReason?: string;
 }
 
 const EMOJI_CATEGORIES = [
@@ -58,6 +60,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   onCancelReplyOrEdit,
   onOpenPollModal,
   isBot = false,
+  isRestricted = false,
+  restrictionReason,
 }) => {
   const [text, setText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -394,6 +398,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       )}
 
       {/* Message Input Box Row */}
+      {isRestricted ? (
+        <div className="flex items-center justify-center p-3 bg-neutral-950/80 border border-neutral-800/80 rounded-2xl text-center">
+          <div className="text-xs text-neutral-400 font-medium flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-red-400"></span>
+            <span>{restrictionReason || 'غير مسموح بإرسال الرسائل في هذه المجموعة أو القناة'}</span>
+          </div>
+        </div>
+      ) : (
       <div className="flex items-center gap-2">
         {/* Attach Menu Button */}
         <button
@@ -484,6 +496,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           </button>
         )}
       </div>
+      )}
     </div>
   );
 };

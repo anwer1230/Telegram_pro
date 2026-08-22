@@ -61,6 +61,14 @@ import { indexedDbService } from './lib/indexedDbService';
 import { mtprotoService } from './lib/mtprotoService';
 import { syncEngine } from './lib/sync';
 import { sortChatsWithLastActivePriority, isGroupChat } from './utils/chatSorting';
+import {
+  TLRPC,
+  AndroidUtilities,
+  TelegramTheme,
+  NotificationsController,
+  MessagesController,
+  OpenTelegramLink,
+} from './org/telegram';
 import './system-messages.css';
 
 // ── TYPES ───────────────────────────────────────────────────────────────────
@@ -822,56 +830,16 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          // Filter out old fake mock stories if any exist in cached storage
+          const cleanStories = parsed.filter(
+            (s: any) => s.id !== 'story_my_active' && s.id !== 'story_official' && s.id !== 'story_enjaz'
+          );
+          return cleanStories;
         }
       }
     } catch {}
 
-    const now = Date.now();
-    return [
-      {
-        id: 'story_my_active',
-        user_id: 'me',
-        user_name: 'قصتي الحالية (أنا)',
-        user_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
-        media_url: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80',
-        caption: '🌟 مشروع تليجرام أندرويد 12.x مع دعم كامل للأتمتة والخصوصية القصوى!',
-        views_count: 58,
-        reactions_count: 14,
-        is_viewed: false,
-        created_at: new Date(now - 23.6 * 3600 * 1000).toISOString(),
-        expires_at: new Date(now + 24 * 60 * 1000).toISOString(), // Expires in 24 minutes (< 30 minutes for automatic alert demonstration)
-        date: 'منذ 23 ساعة',
-      },
-      {
-        id: 'story_official',
-        user_id: 'telegram',
-        user_name: 'Telegram News',
-        user_avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150',
-        media_url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800',
-        caption: '🚀 تحديث تليجرام 12.x مع دعم كامل لحارس المجموعات الذكي والشريط السفلي السريع!',
-        views_count: 1420,
-        reactions_count: 245,
-        is_viewed: false,
-        created_at: new Date(now - 2 * 3600 * 1000).toISOString(),
-        expires_at: new Date(now + 22 * 3600 * 1000).toISOString(),
-        date: 'منذ ساعتين',
-      },
-      {
-        id: 'story_enjaz',
-        user_id: 'enjaz_center',
-        user_name: 'مركز إنجاز الأكاديمي',
-        user_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-        media_url: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800',
-        caption: '🎓 نظام الأتمتة المتقدم وتصنيف الروابط والبحوث الأكاديمية متاح الآن بكفاءة عالية.',
-        views_count: 890,
-        reactions_count: 180,
-        is_viewed: false,
-        created_at: new Date(now - 4 * 3600 * 1000).toISOString(),
-        expires_at: new Date(now + 20 * 3600 * 1000).toISOString(),
-        date: 'منذ 4 ساعات',
-      },
-    ];
+    return [];
   });
 
   // Chat Filter Category Tabs State
@@ -2037,19 +2005,33 @@ export default function App() {
   };
 
   useEffect(() => {
+    let isMounted = true;
+
+    // Safety timeout: Ensure the loading splash NEVER displays for more than 1.5 seconds under any network condition
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) {
+        setIsCheckingAuth(false);
+      }
+    }, 1500);
+
     async function checkAuth() {
-      setIsCheckingAuth(true);
       const savedSession = localStorage.getItem('tg_session');
 
       if (savedSession) {
         try {
+          const controller = new AbortController();
+          const restoreTimeout = setTimeout(() => controller.abort(), 1200);
+
           const res = await fetch('/api/auth/restore-session', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ session: savedSession }),
+            signal: controller.signal,
           });
+          clearTimeout(restoreTimeout);
+
           const data = await res.json();
-          if (data.success) {
+          if (data.success && isMounted) {
             setIsLoggedIn(true);
             setCurrentUser(data.user);
             saveCachedUserProfile(data.user);
@@ -2060,53 +2042,71 @@ export default function App() {
               loadChats();
             }
             fetchActualProfilePhoto();
+            clearTimeout(safetyTimer);
             setIsCheckingAuth(false);
             return;
           }
         } catch (e) {
-          console.log('Saved session restore failed, using cached session:', e);
-          // If network failed (offline), but we have a saved session, keep logged in with cached data
-          if (savedSession) {
+          console.log('Saved session restore failed or timed out, using cached session:', e);
+          if (savedSession && isMounted) {
             setIsLoggedIn(true);
             const cachedChats = getCachedChats();
             if (cachedChats.length > 0) {
               setChats(cachedChats);
             }
+            clearTimeout(safetyTimer);
             setIsCheckingAuth(false);
             return;
           }
         }
       }
 
-      // Check server status
+      // Check server status with fast timeout
       try {
-        const r = await fetch('/api/auth/status');
+        const controller = new AbortController();
+        const statusTimeout = setTimeout(() => controller.abort(), 1000);
+
+        const r = await fetch('/api/auth/status', { signal: controller.signal });
+        clearTimeout(statusTimeout);
+
         const d = await r.json();
-        if (d.success && d.authenticated) {
-          setIsLoggedIn(true);
-          setCurrentUser(d.user);
-          saveCachedUserProfile(d.user);
-          loadChats();
-          fetchActualProfilePhoto();
-        } else {
-          // If offline and we had previous cached session
+        if (isMounted) {
+          if (d.success && d.authenticated) {
+            setIsLoggedIn(true);
+            setCurrentUser(d.user);
+            saveCachedUserProfile(d.user);
+            loadChats();
+            fetchActualProfilePhoto();
+          } else {
+            if (!navigator.onLine && savedSession) {
+              setIsLoggedIn(true);
+            } else {
+              setIsLoggedIn(false);
+            }
+          }
+        }
+      } catch (e) {
+        if (isMounted) {
           if (!navigator.onLine && savedSession) {
             setIsLoggedIn(true);
           } else {
             setIsLoggedIn(false);
           }
         }
-      } catch (e) {
-        if (!navigator.onLine && savedSession) {
-          setIsLoggedIn(true);
-        } else {
-          setIsLoggedIn(false);
-        }
       }
-      setIsCheckingAuth(false);
+
+      if (isMounted) {
+        clearTimeout(safetyTimer);
+        setIsCheckingAuth(false);
+      }
     }
 
     checkAuth();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(safetyTimer);
+    };
   }, []);
 
   // ── RESEND CODE TIMER ─────────────────────────────────────────────────────
@@ -3075,7 +3075,9 @@ export default function App() {
         });
         const data = await res.json();
         if (!data.success) {
-          showToast(data.error || (lang === 'ar' ? 'فشل إرسال الرسالة إلى تليجرام' : 'Failed to send to Telegram'));
+          const tlError = new TLRPC.TL_error(res.status, data.error || 'SEND_ERROR');
+          const evalResult = MessagesController.getInstance().handleChatError(cid, tlError);
+          showToast(evalResult.userPrompt);
         }
       } catch (e) {
         showToast(lang === 'ar' ? 'تعذر إرسال الرسالة' : 'Message send error');

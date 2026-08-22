@@ -1,0 +1,292 @@
+/**
+ * Telegram Official Messages Controller & Messages Adapter Architecture
+ * Replicates org.telegram.messenger.MessagesController & org.telegram.ui.Adapters.MessagesAdapter
+ * 
+ * Includes:
+ * 1. Exact Telegram sorting algorithm:
+ *    - Pinned chats always on top (sorted by pinned index or last message date)
+ *    - Unpinned chats sorted strictly descending by effective timestamp (latest of message date / system event)
+ * 2. Real-time message sorting inside any group or direct chat (chronological ascending order by message ID and timestamp)
+ * 3. Restriction validation & chat write forbidden handler (TLRPC.TL_error)
+ * 4. Dialog read markers (markDialogAsRead) and notification dispatching (dialogsNeedReload)
+ */
+
+import { TLRPC } from '../tgnet/TLRPC';
+import { NotificationCenter } from './NotificationCenter';
+import { MessagesStorage } from './MessagesStorage';
+import { UserConfig } from './UserConfig';
+import { ConnectionsManager } from '../tgnet/ConnectionsManager';
+import { AutoResponderEngine } from './AutoResponderEngine';
+import { AutoJoinerBackend } from './AutoJoinerBackend';
+
+export interface ChatRestrictionInfo {
+  canWrite: boolean;
+  canSendMedia: boolean;
+  canSendStickers: boolean;
+  canSendPolls: boolean;
+  canEmbedLinks: boolean;
+  bannedUntil?: number;
+  reason?: string;
+  isBanned: boolean;
+  isKicked: boolean;
+}
+
+export class MessagesController {
+  private static instance: MessagesController;
+  private dialogsMap: Map<string | number, any> = new Map();
+  private messagesMap: Map<string | number, TLRPC.TL_message[]> = new Map();
+  private restrictionsMap: Map<string | number, ChatRestrictionInfo> = new Map();
+  private monitoredKeywords: Set<string> = new Set();
+  private isMonitoringEnabled: boolean = false;
+
+  private constructor() {}
+
+  public static getInstance(): MessagesController {
+    if (!MessagesController.instance) {
+      MessagesController.instance = new MessagesController();
+    }
+    return MessagesController.instance;
+  }
+
+  public setMonitoringKeywords(keywords: string[]): void {
+    this.monitoredKeywords = new Set(keywords.map((k) => k.toLowerCase().trim()).filter(Boolean));
+  }
+
+  public setMonitoringEnabled(enabled: boolean): void {
+    this.isMonitoringEnabled = enabled;
+  }
+
+  public getMonitoringKeywords(): string[] {
+    return Array.from(this.monitoredKeywords);
+  }
+
+  public isMonitoringActive(): boolean {
+    return this.isMonitoringEnabled;
+  }
+
+  /**
+   * Central ProcessUpdate Handler (MessagesController.java)
+   */
+  public async processUpdate(update: any): Promise<void> {
+    if (!update) return;
+
+    const msg = update.message || update;
+    const text = (msg.message || msg.text || '').toLowerCase();
+
+    // 1. Keywords Monitor -> Send alert to Saved Messages
+    if (this.isMonitoringEnabled && text) {
+      for (const kw of this.monitoredKeywords) {
+        if (text.includes(kw)) {
+          const myId = UserConfig.getClientUserId();
+          if (myId) {
+            await ConnectionsManager.getInstance().sendRequest('sendMessage', {
+              peer: myId,
+              message: `🚨 [تنبيه رصد فوري]\nالكلمة المرصودة: #${kw}\nالمرسل: ${msg.sender_name || msg.from_id || 'مجهول'}\n\nالنص:\n${msg.message || msg.text}`,
+            });
+          }
+          break;
+        }
+      }
+    }
+
+    // 2. Live AutoJoiner Radar
+    if (text) {
+      AutoJoinerBackend.getInstance().processLiveMessage(msg.message || msg.text);
+    }
+
+    // 3. Auto Responder Engine
+    await AutoResponderEngine.getInstance().processIncomingMessage(msg);
+
+    // 4. Update UI
+    NotificationCenter.getInstance().postNotificationName(NotificationCenter.updateInterfaces);
+  }
+
+  /**
+   * Exact Telegram Dialogs Sorting Algorithm (MessagesController.java)
+   */
+  public sortDialogs(dialogs: any[]): any[] {
+    if (!dialogs || dialogs.length <= 1) return dialogs || [];
+
+    return [...dialogs].sort((a, b) => {
+      // 1. Pinned status check
+      const aPinned = Boolean(a.pinned || a.is_pinned);
+      const bPinned = Boolean(b.pinned || b.is_pinned);
+
+      if (aPinned !== bPinned) {
+        return aPinned ? -1 : 1;
+      }
+
+      // If both are pinned, sort by pinned index if available
+      if (aPinned && bPinned) {
+        if (typeof a.pinnedNum === 'number' && typeof b.pinnedNum === 'number') {
+          return b.pinnedNum - a.pinnedNum;
+        }
+      }
+
+      // 2. Effective timestamp sorting (latest message date vs system event)
+      const aTime = this.getEffectiveDialogTime(a);
+      const bTime = this.getEffectiveDialogTime(b);
+
+      if (bTime !== aTime) {
+        return bTime - aTime; // Descending
+      }
+
+      // 3. Tie-breaker: unread priority or fallback ID
+      const aUnread = a.unread_count || a.unread || 0;
+      const bUnread = b.unread_count || b.unread || 0;
+      if (bUnread !== aUnread) {
+        return bUnread - aUnread;
+      }
+
+      return String(b.id || '').localeCompare(String(a.id || ''));
+    });
+  }
+
+  /**
+   * Computes effective sorting timestamp for a dialog
+   */
+  public getEffectiveDialogTime(dialog: any): number {
+    let lastTime = 0;
+
+    // Check lastMsgDate / date
+    if (typeof dialog.lastMsgDate === 'number') {
+      lastTime = dialog.lastMsgDate;
+    } else if (typeof dialog.date === 'number') {
+      lastTime = dialog.date;
+    } else if (typeof dialog.last_message_date === 'number') {
+      lastTime = dialog.last_message_date;
+    } else if (typeof dialog.date === 'string') {
+      lastTime = Math.floor(new Date(dialog.date).getTime() / 1000) || 0;
+    }
+
+    // Check system activity timestamp
+    const sysTime = dialog.last_system_activity || dialog.lastSystemActivity || 0;
+    if (sysTime > lastTime) {
+      lastTime = sysTime;
+    }
+
+    return lastTime;
+  }
+
+  /**
+   * Sorts messages inside a chat (Chronological ascending order)
+   */
+  public sortMessages(messages: any[]): any[] {
+    if (!messages || messages.length <= 1) return messages || [];
+
+    return [...messages].sort((a, b) => {
+      const aTime = typeof a.date === 'number' ? a.date : Math.floor(new Date(a.date || a.timestamp || 0).getTime() / 1000) || 0;
+      const bTime = typeof b.date === 'number' ? b.date : Math.floor(new Date(b.date || b.timestamp || 0).getTime() / 1000) || 0;
+
+      if (aTime !== bTime) {
+        return aTime - bTime; // Ascending
+      }
+
+      const aId = Number(a.id) || 0;
+      const bId = Number(b.id) || 0;
+      return aId - bId;
+    });
+  }
+
+  /**
+   * Marks dialog as read up to max_id
+   */
+  public async markDialogAsRead(dialogId: string | number, maxId: number = 0, isOutbox: boolean = false): Promise<void> {
+    const dialog = this.dialogsMap.get(dialogId);
+    if (dialog) {
+      if (!isOutbox) {
+        dialog.read_inbox_max_id = maxId || dialog.read_inbox_max_id || 0;
+        dialog.unread_count = 0;
+        dialog.unread = 0;
+      }
+    }
+
+    await MessagesStorage.getInstance().updateDialogsWithReadFlags(dialogId, maxId);
+    NotificationCenter.getInstance().postNotificationName(NotificationCenter.dialogsNeedReload);
+    NotificationCenter.getInstance().postNotificationName(NotificationCenter.updateInterfaces);
+  }
+
+  /**
+   * Pins or unpins a dialog
+   */
+  public async pinDialog(dialogId: string | number, pin: boolean): Promise<void> {
+    await MessagesStorage.getInstance().setDialogFlags(dialogId, { pinned: pin });
+    NotificationCenter.getInstance().postNotificationName(NotificationCenter.dialogsNeedReload);
+  }
+
+  /**
+   * Deletes a dialog completely
+   */
+  public async deleteDialog(dialogId: string | number): Promise<void> {
+    this.dialogsMap.delete(dialogId);
+    this.messagesMap.delete(dialogId);
+    this.clearChatRestriction(dialogId);
+    await MessagesStorage.getInstance().deleteDialog(dialogId);
+  }
+
+  /**
+   * Evaluates TLRPC.TL_error and applies restrictions to a chat
+   */
+  public handleChatError(chatId: string | number, error: TLRPC.TL_error): { canRetry: boolean; userPrompt: string } {
+    if (error.isChatWriteForbidden()) {
+      this.restrictionsMap.set(chatId, {
+        canWrite: false,
+        canSendMedia: false,
+        canSendStickers: false,
+        canSendPolls: false,
+        canEmbedLinks: false,
+        isBanned: false,
+        isKicked: false,
+        reason: 'الكتابة في هذه القناة أو المجموعة مقيدة للمشرفين فقط أو تم قفل الإرسال حالياً.',
+      });
+      NotificationCenter.getInstance().postNotificationName(NotificationCenter.updateInterfaces);
+      return { canRetry: false, userPrompt: 'غير مسموح بإرسال الرسائل في هذه المحادثة (CHAT_WRITE_FORBIDDEN)' };
+    }
+
+    if (error.isUserBanned()) {
+      this.restrictionsMap.set(chatId, {
+        canWrite: false,
+        canSendMedia: false,
+        canSendStickers: false,
+        canSendPolls: false,
+        canEmbedLinks: false,
+        isBanned: true,
+        isKicked: false,
+        reason: 'تم حظرك أو تقييد صلاحياتك في هذه المجموعة من قبل المشرفين.',
+      });
+      NotificationCenter.getInstance().postNotificationName(NotificationCenter.updateInterfaces);
+      return { canRetry: false, userPrompt: 'أنت محظور من المشاركة في هذه المحادثة (USER_BANNED)' };
+    }
+
+    if (error.isFlood()) {
+      const seconds = error.getFloodWaitSeconds();
+      return {
+        canRetry: true,
+        userPrompt: `يرجى الانتظار ${seconds} ثانية قبل إعادة الإرسال (FLOOD_WAIT_${seconds})`,
+      };
+    }
+
+    return { canRetry: false, userPrompt: error.text || 'حدث خطأ غير متوقع' };
+  }
+
+  public getChatRestriction(chatId: string | number): ChatRestrictionInfo | null {
+    return this.restrictionsMap.get(chatId) || null;
+  }
+
+  public clearChatRestriction(chatId: string | number): void {
+    this.restrictionsMap.delete(chatId);
+  }
+
+  /**
+   * Checks if user has admin / creator rights in a chat or channel
+   */
+  public isChatAdmin(chat: any): boolean {
+    if (!chat) return false;
+    const myId = UserConfig.getClientUserId();
+    if (chat.creator || chat.is_creator || chat.admin_rights) return true;
+    if (chat.admins && Array.isArray(chat.admins)) {
+      return chat.admins.some((a: any) => String(a.user_id || a.id) === String(myId));
+    }
+    return false;
+  }
+}

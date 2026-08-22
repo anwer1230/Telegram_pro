@@ -470,15 +470,15 @@ app.get('/api/user/info', async (req: Request, res: Response) => {
 
   res.json({
     success: true,
-    user_id: profileStore.uid || 10001,
-    id: profileStore.uid || 10001,
-    name: `${profileStore.first_name || 'Me'} ${profileStore.last_name || ''}`.trim(),
-    first_name: profileStore.first_name,
-    last_name: profileStore.last_name,
-    username: profileStore.username || 'anwer1230',
-    phone: profileStore.phone || '+964 770 123 4567',
+    user_id: profileStore.uid || '',
+    id: profileStore.uid || '',
+    name: `${profileStore.first_name || ''} ${profileStore.last_name || ''}`.trim() || 'مستخدم تليجرام',
+    first_name: profileStore.first_name || 'مستخدم تليجرام',
+    last_name: profileStore.last_name || '',
+    username: profileStore.username || '',
+    phone: profileStore.phone || '',
     photo: profileStore.photo || null,
-    bio: profileStore.bio || 'مطور ومدير مركز سرعة إنجاز الأكاديمي 🚀',
+    bio: profileStore.bio || '',
   });
 });
 
@@ -492,12 +492,12 @@ app.get('/api/user/full', async (req: Request, res: Response) => {
       success: true,
       profile: {
         id: profileStore.uid,
-        name: `${profileStore.first_name} ${profileStore.last_name}`.trim(),
+        name: `${profileStore.first_name || ''} ${profileStore.last_name || ''}`.trim() || 'مستخدم تليجرام',
         first_name: profileStore.first_name,
         last_name: profileStore.last_name,
         username: profileStore.username,
         phone: profileStore.phone,
-        bio: profileStore.bio || 'مطور ومدير مركز سرعة إنجاز الأكاديمي 🚀',
+        bio: profileStore.bio || '',
         photo: profileStore.photo,
         has_2fa: profileStore.has_2fa,
         is_online: true,
@@ -603,10 +603,10 @@ app.get('/api/profile/:id', (req: Request, res: Response) => {
       success: true,
       profile: {
         id: profileStore.uid,
-        name: `${profileStore.first_name} ${profileStore.last_name}`.trim(),
+        name: `${profileStore.first_name || ''} ${profileStore.last_name || ''}`.trim() || 'مستخدم تليجرام',
         username: profileStore.username,
         phone: profileStore.phone,
-        bio: profileStore.bio || 'مطور ومدير مركز سرعة إنجاز الأكاديمي 🚀',
+        bio: profileStore.bio || '',
         is_online: true,
         photo: profileStore.photo,
       }
@@ -1703,7 +1703,7 @@ app.post('/api/chat/search', (req: Request, res: Response) => {
 app.get('/api/chat/:cid/members', (req: Request, res: Response) => {
   const cid = parseInt(req.params.cid, 10);
   const members = [
-    { id: '1', name: 'أنور فؤاد (أنت)', username: '@anwer1230', role: 'owner', avatar: profileStore.photo },
+    { id: '1', name: `${profileStore.first_name || 'أنت'} ${profileStore.last_name || ''}`.trim() || 'أنت', username: profileStore.username ? `@${profileStore.username}` : '', role: 'owner', avatar: profileStore.photo },
     { id: '2', name: 'د. أحمد السالم', username: '@dr_ahmed', role: 'administrator', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80' },
     { id: '3', name: 'م. سارة علي', username: '@eng_sara', role: 'administrator', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80' },
     { id: '4', name: 'خالد عبد الله', username: '@khaled_a', role: 'member', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80' },

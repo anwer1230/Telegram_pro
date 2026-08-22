@@ -1,17 +1,17 @@
 import { Chat, ChatFolder, Message, UserProfile } from '../types';
 
 export const initialUserProfile: UserProfile = {
-  id: 'me_tg_user',
-  uid: '10001',
-  first_name: 'أنور',
-  last_name: 'التميمي',
-  username: '@anwer1230',
-  phone: '+964 770 123 4567',
-  bio: 'مطور ومدير مركز سرعة إنجاز الأكاديمي 🚀 | باحث ومبرمج أنظمة تليجرام السحابية',
-  photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
-  has_2fa: true,
-  hint_2fa: 'My Cloud 2026',
-  is_premium: true,
+  id: '',
+  uid: '',
+  first_name: 'مستخدم تليجرام',
+  last_name: '',
+  username: '',
+  phone: '',
+  bio: '',
+  photo: '',
+  has_2fa: false,
+  hint_2fa: '',
+  is_premium: false,
   is_online: true,
 };
 
