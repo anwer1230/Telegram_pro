@@ -1,15 +1,19 @@
 /**
  * Telegram Official MessagesStorage Engine (SQLite Virtual Layer & Fast Cache)
- * Replicates org.telegram.messenger.MessagesStorage.java & SQLiteDatabase
+ * Replicates org.telegram.messenger.MessagesStorage.java from DrKLO/Telegram
  */
 
 import { NotificationCenter } from './NotificationCenter';
+import { UserConfig } from './UserConfig';
 
 export class SQLiteDatabase {
   private inMemoryTables: Map<string, Map<string | number, any>> = new Map();
+  private readonly storagePrefix: string;
 
-  constructor() {
+  constructor(prefix: string = 'account_0') {
+    this.storagePrefix = prefix;
     this.initTables();
+    this.restoreFromStorage();
   }
 
   private initTables(): void {
@@ -17,13 +21,40 @@ export class SQLiteDatabase {
     this.inMemoryTables.set('messages', new Map());
     this.inMemoryTables.set('users', new Map());
     this.inMemoryTables.set('chats', new Map());
+    this.inMemoryTables.set('params', new Map());
+  }
+
+  private restoreFromStorage(): void {
+    try {
+      const raw = localStorage.getItem(`tg_db_${this.storagePrefix}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        for (const [tableName, entries] of Object.entries(parsed)) {
+          const map = new Map();
+          if (Array.isArray(entries)) {
+            for (const [key, val] of entries) {
+              map.set(key, val);
+            }
+          }
+          this.inMemoryTables.set(tableName, map);
+        }
+      }
+    } catch {}
+  }
+
+  public persistToStorage(): void {
+    try {
+      const exportObj: Record<string, any[]> = {};
+      for (const [tableName, map] of this.inMemoryTables.entries()) {
+        exportObj[tableName] = Array.from(map.entries());
+      }
+      localStorage.setItem(`tg_db_${this.storagePrefix}`, JSON.stringify(exportObj));
+    } catch {}
   }
 
   public async execute(sql: string, params: any[] = []): Promise<void> {
-    // Execute simulated or local DB operations
-    return new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    this.persistToStorage();
+    return new Promise((resolve) => setTimeout(resolve, 0));
   }
 
   public async queryFinalized(table: string, queryFn?: (item: any) => boolean): Promise<any[]> {
@@ -43,6 +74,7 @@ export class SQLiteDatabase {
       this.inMemoryTables.set(table, targetTable);
     }
     targetTable.set(id, value);
+    this.persistToStorage();
   }
 
   public get(table: string, id: string | number): any {
@@ -50,23 +82,37 @@ export class SQLiteDatabase {
   }
 
   public remove(table: string, id: string | number): boolean {
-    return this.inMemoryTables.get(table)?.delete(id) || false;
+    const res = this.inMemoryTables.get(table)?.delete(id) || false;
+    this.persistToStorage();
+    return res;
+  }
+
+  public clear(): void {
+    this.initTables();
+    try {
+      localStorage.removeItem(`tg_db_${this.storagePrefix}`);
+    } catch {}
   }
 }
 
 export class MessagesStorage {
-  private static instance: MessagesStorage;
+  private static instances: MessagesStorage[] = [];
   public database: SQLiteDatabase;
+  private readonly currentAccount: number;
 
-  private constructor() {
-    this.database = new SQLiteDatabase();
+  private constructor(account: number) {
+    this.currentAccount = account;
+    this.database = new SQLiteDatabase(`account_${account}`);
   }
 
-  public static getInstance(account: number = 0): MessagesStorage {
-    if (!MessagesStorage.instance) {
-      MessagesStorage.instance = new MessagesStorage();
+  public static getInstance(account: number = UserConfig.selectedAccount): MessagesStorage {
+    if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) {
+      account = 0;
     }
-    return MessagesStorage.instance;
+    if (!MessagesStorage.instances[account]) {
+      MessagesStorage.instances[account] = new MessagesStorage(account);
+    }
+    return MessagesStorage.instances[account];
   }
 
   public async setDialogFlags(dialogId: string | number, flags: { pinned?: boolean; pinnedNum?: number; muted?: boolean; unread?: number }): Promise<void> {
@@ -74,15 +120,15 @@ export class MessagesStorage {
     const updated = { ...dialog, ...flags };
     this.database.put('dialogs', dialogId, updated);
     await this.database.execute('UPDATE dialogs SET flags = ? WHERE id = ?', [JSON.stringify(flags), dialogId]);
-    NotificationCenter.getInstance().postNotificationName(NotificationCenter.dialogsNeedReload);
+    NotificationCenter.getInstance(this.currentAccount).postNotificationName(NotificationCenter.dialogsNeedReload);
   }
 
   public async deleteDialog(dialogId: string | number, folderId: number = 0): Promise<void> {
     this.database.remove('dialogs', dialogId);
     await this.database.execute('DELETE FROM dialogs WHERE id = ?', [dialogId]);
     await this.database.execute('DELETE FROM messages WHERE dialog_id = ?', [dialogId]);
-    NotificationCenter.getInstance().postNotificationName(NotificationCenter.dialogDeleted, dialogId);
-    NotificationCenter.getInstance().postNotificationName(NotificationCenter.dialogsNeedReload);
+    NotificationCenter.getInstance(this.currentAccount).postNotificationName(NotificationCenter.dialogDeleted, dialogId);
+    NotificationCenter.getInstance(this.currentAccount).postNotificationName(NotificationCenter.dialogsNeedReload);
   }
 
   public async markMessagesAsDeleted(dialogId: string | number, messageIds: Array<number | string>): Promise<void> {
@@ -90,7 +136,7 @@ export class MessagesStorage {
       this.database.remove('messages', `${dialogId}_${mid}`);
     }
     await this.database.execute('DELETE FROM messages WHERE id IN (?)', [messageIds.join(',')]);
-    NotificationCenter.getInstance().postNotificationName(NotificationCenter.messagesDeleted, messageIds, dialogId);
+    NotificationCenter.getInstance(this.currentAccount).postNotificationName(NotificationCenter.messagesDeleted, messageIds, dialogId);
   }
 
   public async putMessages(messages: any[], isChannel: boolean = false): Promise<void> {
@@ -98,7 +144,7 @@ export class MessagesStorage {
       const key = `${msg.chat_id || msg.dialog_id}_${msg.id}`;
       this.database.put('messages', key, msg);
     }
-    NotificationCenter.getInstance().postNotificationName(NotificationCenter.didReceivedNewMessages, messages);
+    NotificationCenter.getInstance(this.currentAccount).postNotificationName(NotificationCenter.didReceivedNewMessages, messages);
   }
 
   public async updateDialogsWithReadFlags(dialogId: string | number, maxId: number): Promise<void> {
@@ -108,6 +154,10 @@ export class MessagesStorage {
       dialog.unread_count = 0;
       this.database.put('dialogs', dialogId, dialog);
     }
-    NotificationCenter.getInstance().postNotificationName(NotificationCenter.dialogsNeedReload);
+    NotificationCenter.getInstance(this.currentAccount).postNotificationName(NotificationCenter.dialogsNeedReload);
+  }
+
+  public clearAll(): void {
+    this.database.clear();
   }
 }

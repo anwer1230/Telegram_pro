@@ -1,10 +1,14 @@
 /**
  * Telegram Official NotificationCenter Observer System
- * Replicates org.telegram.messenger.NotificationCenter.java
+ * Replicates org.telegram.messenger.NotificationCenter.java from DrKLO/Telegram
  */
 
+import { UserConfig } from './UserConfig';
+
 export class NotificationCenter {
-  private static instance: NotificationCenter;
+  private static instances: NotificationCenter[] = [];
+  private static globalInstance: NotificationCenter;
+  private readonly currentAccount: number;
   private observers: Map<number, Set<(id: number, account: number, ...args: any[]) => void>> = new Map();
 
   // Telegram Event IDs
@@ -28,18 +32,29 @@ export class NotificationCenter {
   public static readonly privacyRulesUpdated: number = 18;
   public static readonly proxySettingsChanged: number = 19;
   public static readonly appDidLogout: number = 20;
+  public static readonly accountSwitched: number = 21;
+  public static readonly didUpdateConnectionState: number = 22;
+  public static readonly updatesDidReceived: number = 23;
 
-  private constructor() {}
+  private constructor(account: number) {
+    this.currentAccount = account;
+  }
 
-  public static getInstance(): NotificationCenter {
-    if (!NotificationCenter.instance) {
-      NotificationCenter.instance = new NotificationCenter();
+  public static getInstance(account: number = UserConfig.selectedAccount): NotificationCenter {
+    if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) {
+      account = 0;
     }
-    return NotificationCenter.instance;
+    if (!NotificationCenter.instances[account]) {
+      NotificationCenter.instances[account] = new NotificationCenter(account);
+    }
+    return NotificationCenter.instances[account];
   }
 
   public static getGlobalInstance(): NotificationCenter {
-    return NotificationCenter.getInstance();
+    if (!NotificationCenter.globalInstance) {
+      NotificationCenter.globalInstance = new NotificationCenter(-1);
+    }
+    return NotificationCenter.globalInstance;
   }
 
   public addObserver(observer: (id: number, account: number, ...args: any[]) => void, id: number): void {
@@ -67,11 +82,16 @@ export class NotificationCenter {
       const copy = Array.from(set);
       copy.forEach((observer) => {
         try {
-          observer(id, 0, ...args);
+          observer(id, this.currentAccount, ...args);
         } catch (e) {
           console.error(`[NotificationCenter] Error in observer for event ${id}:`, e);
         }
       });
+    }
+
+    // Also notify global observers if this is an account instance
+    if (this.currentAccount >= 0 && NotificationCenter.globalInstance) {
+      NotificationCenter.globalInstance.postNotificationName(id, ...args);
     }
   }
 

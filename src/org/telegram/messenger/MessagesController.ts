@@ -1,14 +1,6 @@
 /**
  * Telegram Official Messages Controller & Messages Adapter Architecture
- * Replicates org.telegram.messenger.MessagesController & org.telegram.ui.Adapters.MessagesAdapter
- * 
- * Includes:
- * 1. Exact Telegram sorting algorithm:
- *    - Pinned chats always on top (sorted by pinned index or last message date)
- *    - Unpinned chats sorted strictly descending by effective timestamp (latest of message date / system event)
- * 2. Real-time message sorting inside any group or direct chat (chronological ascending order by message ID and timestamp)
- * 3. Restriction validation & chat write forbidden handler (TLRPC.TL_error)
- * 4. Dialog read markers (markDialogAsRead) and notification dispatching (dialogsNeedReload)
+ * Replicates org.telegram.messenger.MessagesController & org.telegram.ui.Adapters.MessagesAdapter from DrKLO/Telegram
  */
 
 import { TLRPC } from '../tgnet/TLRPC';
@@ -32,20 +24,27 @@ export interface ChatRestrictionInfo {
 }
 
 export class MessagesController {
-  private static instance: MessagesController;
+  private static instances: MessagesController[] = [];
+  public readonly currentAccount: number;
   private dialogsMap: Map<string | number, any> = new Map();
   private messagesMap: Map<string | number, TLRPC.TL_message[]> = new Map();
   private restrictionsMap: Map<string | number, ChatRestrictionInfo> = new Map();
   private monitoredKeywords: Set<string> = new Set();
   private isMonitoringEnabled: boolean = false;
+  public loadingDialogs: boolean = false;
 
-  private constructor() {}
+  private constructor(account: number) {
+    this.currentAccount = account;
+  }
 
-  public static getInstance(): MessagesController {
-    if (!MessagesController.instance) {
-      MessagesController.instance = new MessagesController();
+  public static getInstance(account: number = UserConfig.selectedAccount): MessagesController {
+    if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT) {
+      account = 0;
     }
-    return MessagesController.instance;
+    if (!MessagesController.instances[account]) {
+      MessagesController.instances[account] = new MessagesController(account);
+    }
+    return MessagesController.instances[account];
   }
 
   public setMonitoringKeywords(keywords: string[]): void {
@@ -65,6 +64,34 @@ export class MessagesController {
   }
 
   /**
+   * Load dialogs for current account from server / cache
+   */
+  public async loadDialogs(folderId: number = 0, offset: number = 0, limit: number = 50): Promise<any[]> {
+    this.loadingDialogs = true;
+    try {
+      const res = await ConnectionsManager.getInstance(this.currentAccount).sendRequest('messages.getDialogs', {
+        folder_id: folderId,
+        offset_id: offset,
+        limit,
+      });
+
+      if (res && res.dialogs) {
+        for (const d of res.dialogs) {
+          this.dialogsMap.set(d.id, d);
+          MessagesStorage.getInstance(this.currentAccount).database.put('dialogs', d.id, d);
+        }
+        NotificationCenter.getInstance(this.currentAccount).postNotificationName(NotificationCenter.dialogsNeedReload);
+        return res.dialogs;
+      }
+    } catch (e) {
+      console.warn(`[MessagesController_${this.currentAccount}] loadDialogs error:`, e);
+    } finally {
+      this.loadingDialogs = false;
+    }
+    return Array.from(this.dialogsMap.values());
+  }
+
+  /**
    * Central ProcessUpdate Handler (MessagesController.java)
    */
   public async processUpdate(update: any): Promise<void> {
@@ -72,14 +99,37 @@ export class MessagesController {
 
     const msg = update.message || update;
     const text = (msg.message || msg.text || '').toLowerCase();
+    const cid = msg.chat_id || msg.dialog_id || msg.peer_id;
+
+    if (cid) {
+      // Store in memory & MessagesStorage
+      const list = this.messagesMap.get(cid) || [];
+      const exists = list.some((m) => String(m.id) === String(msg.id));
+      if (!exists) {
+        list.push(msg);
+        this.messagesMap.set(cid, list);
+        MessagesStorage.getInstance(this.currentAccount).putMessages([msg]);
+      }
+
+      // Update dialog top_message
+      let dialog = this.dialogsMap.get(cid);
+      if (dialog) {
+        dialog.last_message = msg;
+        dialog.lastMsg = msg.text || msg.message;
+        dialog.lastMsgDate = msg.date || Math.floor(Date.now() / 1000);
+        if (!msg.out && !msg.from_me) {
+          dialog.unread_count = (dialog.unread_count || 0) + 1;
+        }
+      }
+    }
 
     // 1. Keywords Monitor -> Send alert to Saved Messages
     if (this.isMonitoringEnabled && text) {
       for (const kw of this.monitoredKeywords) {
         if (text.includes(kw)) {
-          const myId = UserConfig.getClientUserId();
+          const myId = UserConfig.getInstance(this.currentAccount).getClientUserId();
           if (myId) {
-            await ConnectionsManager.getInstance().sendRequest('sendMessage', {
+            await ConnectionsManager.getInstance(this.currentAccount).sendRequest('sendMessage', {
               peer: myId,
               message: `🚨 [تنبيه رصد فوري]\nالكلمة المرصودة: #${kw}\nالمرسل: ${msg.sender_name || msg.from_id || 'مجهول'}\n\nالنص:\n${msg.message || msg.text}`,
             });
@@ -98,7 +148,8 @@ export class MessagesController {
     await AutoResponderEngine.getInstance().processIncomingMessage(msg);
 
     // 4. Update UI
-    NotificationCenter.getInstance().postNotificationName(NotificationCenter.updateInterfaces);
+    NotificationCenter.getInstance(this.currentAccount).postNotificationName(NotificationCenter.didReceivedNewMessages, msg);
+    NotificationCenter.getInstance(this.currentAccount).postNotificationName(NotificationCenter.updateInterfaces);
   }
 
   /**
@@ -142,13 +193,8 @@ export class MessagesController {
     });
   }
 
-  /**
-   * Computes effective sorting timestamp for a dialog
-   */
   public getEffectiveDialogTime(dialog: any): number {
     let lastTime = 0;
-
-    // Check lastMsgDate / date
     if (typeof dialog.lastMsgDate === 'number') {
       lastTime = dialog.lastMsgDate;
     } else if (typeof dialog.date === 'number') {
@@ -159,7 +205,6 @@ export class MessagesController {
       lastTime = Math.floor(new Date(dialog.date).getTime() / 1000) || 0;
     }
 
-    // Check system activity timestamp
     const sysTime = dialog.last_system_activity || dialog.lastSystemActivity || 0;
     if (sysTime > lastTime) {
       lastTime = sysTime;
@@ -168,9 +213,6 @@ export class MessagesController {
     return lastTime;
   }
 
-  /**
-   * Sorts messages inside a chat (Chronological ascending order)
-   */
   public sortMessages(messages: any[]): any[] {
     if (!messages || messages.length <= 1) return messages || [];
 
@@ -188,9 +230,6 @@ export class MessagesController {
     });
   }
 
-  /**
-   * Marks dialog as read up to max_id
-   */
   public async markDialogAsRead(dialogId: string | number, maxId: number = 0, isOutbox: boolean = false): Promise<void> {
     const dialog = this.dialogsMap.get(dialogId);
     if (dialog) {
@@ -201,32 +240,23 @@ export class MessagesController {
       }
     }
 
-    await MessagesStorage.getInstance().updateDialogsWithReadFlags(dialogId, maxId);
-    NotificationCenter.getInstance().postNotificationName(NotificationCenter.dialogsNeedReload);
-    NotificationCenter.getInstance().postNotificationName(NotificationCenter.updateInterfaces);
+    await MessagesStorage.getInstance(this.currentAccount).updateDialogsWithReadFlags(dialogId, maxId);
+    NotificationCenter.getInstance(this.currentAccount).postNotificationName(NotificationCenter.dialogsNeedReload);
+    NotificationCenter.getInstance(this.currentAccount).postNotificationName(NotificationCenter.updateInterfaces);
   }
 
-  /**
-   * Pins or unpins a dialog
-   */
   public async pinDialog(dialogId: string | number, pin: boolean): Promise<void> {
-    await MessagesStorage.getInstance().setDialogFlags(dialogId, { pinned: pin });
-    NotificationCenter.getInstance().postNotificationName(NotificationCenter.dialogsNeedReload);
+    await MessagesStorage.getInstance(this.currentAccount).setDialogFlags(dialogId, { pinned: pin });
+    NotificationCenter.getInstance(this.currentAccount).postNotificationName(NotificationCenter.dialogsNeedReload);
   }
 
-  /**
-   * Deletes a dialog completely
-   */
   public async deleteDialog(dialogId: string | number): Promise<void> {
     this.dialogsMap.delete(dialogId);
     this.messagesMap.delete(dialogId);
     this.clearChatRestriction(dialogId);
-    await MessagesStorage.getInstance().deleteDialog(dialogId);
+    await MessagesStorage.getInstance(this.currentAccount).deleteDialog(dialogId);
   }
 
-  /**
-   * Evaluates TLRPC.TL_error and applies restrictions to a chat
-   */
   public handleChatError(chatId: string | number, error: TLRPC.TL_error): { canRetry: boolean; userPrompt: string } {
     if (error.isChatWriteForbidden()) {
       this.restrictionsMap.set(chatId, {
@@ -239,7 +269,7 @@ export class MessagesController {
         isKicked: false,
         reason: 'الكتابة في هذه القناة أو المجموعة مقيدة للمشرفين فقط أو تم قفل الإرسال حالياً.',
       });
-      NotificationCenter.getInstance().postNotificationName(NotificationCenter.updateInterfaces);
+      NotificationCenter.getInstance(this.currentAccount).postNotificationName(NotificationCenter.updateInterfaces);
       return { canRetry: false, userPrompt: 'غير مسموح بإرسال الرسائل في هذه المحادثة (CHAT_WRITE_FORBIDDEN)' };
     }
 
@@ -254,7 +284,7 @@ export class MessagesController {
         isKicked: false,
         reason: 'تم حظرك أو تقييد صلاحياتك في هذه المجموعة من قبل المشرفين.',
       });
-      NotificationCenter.getInstance().postNotificationName(NotificationCenter.updateInterfaces);
+      NotificationCenter.getInstance(this.currentAccount).postNotificationName(NotificationCenter.updateInterfaces);
       return { canRetry: false, userPrompt: 'أنت محظور من المشاركة في هذه المحادثة (USER_BANNED)' };
     }
 
@@ -277,12 +307,9 @@ export class MessagesController {
     this.restrictionsMap.delete(chatId);
   }
 
-  /**
-   * Checks if user has admin / creator rights in a chat or channel
-   */
   public isChatAdmin(chat: any): boolean {
     if (!chat) return false;
-    const myId = UserConfig.getClientUserId();
+    const myId = UserConfig.getInstance(this.currentAccount).getClientUserId();
     if (chat.creator || chat.is_creator || chat.admin_rights) return true;
     if (chat.admins && Array.isArray(chat.admins)) {
       return chat.admins.some((a: any) => String(a.user_id || a.id) === String(myId));

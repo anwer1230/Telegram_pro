@@ -8,6 +8,8 @@ export * from './tgnet/TLClassStore';
 export * from './tgnet/ConnectionsManager';
 
 export * from './messenger/AndroidUtilities';
+export * from './messenger/AccountInstance';
+export * from './messenger/SyncEngine';
 export * from './messenger/NotificationCenter';
 export * from './messenger/UserConfig';
 export * from './messenger/NotificationsController';

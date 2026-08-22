@@ -4874,7 +4874,7 @@ app.post('/api/accounts/sign_in', async (req: Request, res: Response) => {
 app.post('/api/accounts/verify_2fa', async (req: Request, res: Response) => {
   const { password, phone } = req.body;
   try {
-    const result = await verifyTelegramPassword(password, phone);
+    const result = await verifyTelegramPassword(phone || profileStore.phone || '', password);
     res.json({ success: true, user: result.user, session: result.session });
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'كلمة المرور غير صحيحة' });
@@ -4934,6 +4934,152 @@ app.get('/api/accounts/:id/isolated_workspace', (req: Request, res: Response) =>
 
 app.post('/api/accounts/:id/save_isolated_settings', (req: Request, res: Response) => {
   res.json({ success: true, message: 'تم حفظ إعدادات الحساب المستقل بنجاح' });
+});
+
+// ================= DRKLO/TELEGRAM OFFICIAL MTPROTO RPC DISPATCHER =================
+app.post(['/api/telegram/auth.sendCode', '/api/telegram/auth/sendCode'], async (req: Request, res: Response) => {
+  const { phone_number, phone } = req.body;
+  const targetPhone = phone_number || phone;
+  if (!targetPhone) return res.status(400).json({ success: false, error: 'PHONE_NUMBER_INVALID' });
+  try {
+    const result = await sendTelegramCode(targetPhone);
+    res.json({ success: true, phone_code_hash: result.phoneCodeHash, timeout: 60 });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'SEND_CODE_ERROR' });
+  }
+});
+
+app.post(['/api/telegram/auth.signIn', '/api/telegram/auth/signIn'], async (req: Request, res: Response) => {
+  const { phone_number, phone, phone_code, code, phone_code_hash } = req.body;
+  const targetPhone = phone_number || phone;
+  const targetCode = phone_code || code;
+  try {
+    const result = await verifyTelegramCode(targetPhone, targetCode, phone_code_hash);
+    res.json({ success: true, user: result.user, session: result.session });
+  } catch (err: any) {
+    if (err.message === '2FA_NEEDED' || err.message === 'SESSION_PASSWORD_NEEDED') {
+      return res.json({ success: false, error: 'SESSION_PASSWORD_NEEDED', needs_2fa: true });
+    }
+    res.status(400).json({ success: false, error: err.message || 'SIGN_IN_ERROR' });
+  }
+});
+
+app.post(['/api/telegram/auth.checkPassword', '/api/telegram/auth/checkPassword'], async (req: Request, res: Response) => {
+  const { password, phone } = req.body;
+  try {
+    const result = await verifyTelegramPassword(phone || profileStore.phone || '', password);
+    res.json({ success: true, user: result.user, session: result.session });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'PASSWORD_INVALID' });
+  }
+});
+
+app.post(['/api/telegram/auth.logOut', '/api/telegram/auth/logOut'], async (req: Request, res: Response) => {
+  try {
+    await logoutTelegram();
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'LOGOUT_ERROR' });
+  }
+});
+
+app.post(['/api/telegram/messages.getDialogs', '/api/telegram/messages/getDialogs'], async (req: Request, res: Response) => {
+  try {
+    let dialogs = chatsStore;
+    if (isTelegramClientActive()) {
+      try {
+        const liveDialogs = await getActiveTelegramDialogs();
+        if (Array.isArray(liveDialogs) && liveDialogs.length > 0) {
+          dialogs = liveDialogs;
+          chatsStore = liveDialogs;
+        }
+      } catch (e) {
+        // preserve local chatsStore
+      }
+    }
+    res.json({
+      success: true,
+      dialogs,
+      chats: dialogs,
+      users: [profileStore],
+      count: dialogs.length,
+    });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'GET_DIALOGS_ERROR' });
+  }
+});
+
+app.post(['/api/telegram/messages.getHistory', '/api/telegram/messages/getHistory'], async (req: Request, res: Response) => {
+  const { peer_id, chat_id, offset_id = 0, limit = 50 } = req.body;
+  const targetId = peer_id || chat_id;
+  try {
+    let messages = messagesMapStore[targetId] || [];
+    if (isTelegramClientActive() && targetId) {
+      try {
+        const liveMsgs = await getTelegramChatMessages(targetId);
+        if (Array.isArray(liveMsgs) && liveMsgs.length > 0) {
+          messages = liveMsgs;
+          messagesMapStore[targetId] = liveMsgs;
+        }
+      } catch (e) {
+        // preserve local
+      }
+    }
+    res.json({ success: true, messages, count: messages.length });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'GET_HISTORY_ERROR' });
+  }
+});
+
+app.post(['/api/telegram/updates.getDifference', '/api/telegram/updates/getDifference'], async (req: Request, res: Response) => {
+  const { pts = 100, date = Math.floor(Date.now() / 1000), qts = 0 } = req.body;
+  res.json({
+    success: true,
+    state: {
+      pts: Number(pts) + 1,
+      qts: Number(qts),
+      date: Math.floor(Date.now() / 1000),
+      seq: 1,
+      unread_count: 0,
+    },
+    new_messages: [],
+    other_updates: [],
+    chats: chatsStore,
+    users: [profileStore],
+  });
+});
+
+app.post(['/api/telegram/sendMessage', '/api/telegram/messages.sendMessage'], async (req: Request, res: Response) => {
+  const { peer, peer_id, chat_id, message, text, reply_to_msg_id } = req.body;
+  const targetId = peer || peer_id || chat_id;
+  const msgText = message || text;
+  if (!targetId || !msgText) return res.status(400).json({ success: false, error: 'PEER_OR_TEXT_EMPTY' });
+
+  try {
+    let sentMsg: any = null;
+    if (isTelegramClientActive()) {
+      sentMsg = await sendTelegramChatMessage(targetId, msgText);
+    } else {
+      sentMsg = {
+        id: Date.now(),
+        chat_id: targetId,
+        sender_id: 'me',
+        sender_name: profileStore.first_name || 'أنت',
+        date: Math.floor(Date.now() / 1000),
+        is_outgoing: true,
+        from_me: true,
+        text: msgText,
+        content: { type: 'text', text: msgText },
+      };
+      if (!messagesMapStore[targetId]) messagesMapStore[targetId] = [];
+      messagesMapStore[targetId].push(sentMsg);
+    }
+
+    broadcastSSE('new_message', { chat_id: targetId, message: sentMsg });
+    res.json({ success: true, message: sentMsg });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'SEND_MESSAGE_ERROR' });
+  }
 });
 
 // ================= TELEGRAM_ANWER APK & DRKLO/TELEGRAM v12.9.2 ENGINE =================

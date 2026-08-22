@@ -79,7 +79,7 @@ export const TelegramApkInstallModal: React.FC<TelegramApkInstallModalProps> = (
   onClose,
   onCloseOverride,
 }) => {
-  const [activeTab, setActiveTab] = useState<'apk' | 'mechanisms' | 'options' | 'pwa' | 'qr'>('apk');
+  const [activeTab, setActiveTab] = useState<'apk' | 'mechanisms' | 'options' | 'pwa' | 'qr' | 'github'>('apk');
   const [selectedArch, setSelectedArch] = useState<'arm64' | 'universal' | 'armv7'>('arm64');
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showNotification, setShowNotification] = useState(true);
@@ -518,6 +518,18 @@ export const TelegramApkInstallModal: React.FC<TelegramApkInstallModalProps> = (
               <QrCode className="w-4 h-4 text-pink-300" />
               <span>كود QR</span>
             </button>
+
+            <button
+              onClick={() => setActiveTab('github')}
+              className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                activeTab === 'github'
+                  ? 'bg-purple-600 text-white shadow-md'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+              }`}
+            >
+              <GitBranch className="w-4 h-4 text-purple-300" />
+              <span>GitHub Actions CI/CD</span>
+            </button>
           </div>
 
           {/* Tab Contents */}
@@ -866,14 +878,88 @@ export const TelegramApkInstallModal: React.FC<TelegramApkInstallModalProps> = (
                   <div className="bg-zinc-900 p-3 rounded-xl border border-zinc-800 font-mono text-[10px] text-zinc-300 space-y-1 overflow-x-auto dir-ltr text-left">
                     <div className="text-emerald-400"># Project Credentials Configuration</div>
                     <div>APP_NAME = <span className="text-sky-300">Telegram_Anwer</span></div>
+                    <div>API_ID = <span className="text-emerald-300">22043994</span></div>
+                    <div>API_HASH = <span className="text-emerald-300">56f64582b363d367280db96586b97801</span></div>
                     <div>APP_VERSION = <span className="text-sky-300">12.9.2</span> (Build 4980)</div>
                     <div>TARGET_ARCH = <span className="text-sky-300">arm64-v8a</span> (NDK 27.2.12479018)</div>
                     <div>RELEASE_KEY_ALIAS = <span className="text-amber-300">Telegram_Anwer</span></div>
+                    <div>RELEASE_KEY_PASSWORD = <span className="text-amber-300">772997043a**</span></div>
                     <div>RELEASE_STORE_PASSWORD = <span className="text-amber-300">772997043a**</span></div>
                     <div>PACKAGE_NAME = <span className="text-purple-300">org.telegram.messenger.anwer</span></div>
                     <div>SOURCE_REPO = <span className="text-zinc-400">https://github.com/DrKLO/Telegram</span></div>
                   </div>
                 </div>
+
+                {/* 4. Complete DrKLO/Telegram 5-Step Official Build Guide */}
+                <div className="bg-zinc-950/90 rounded-2xl p-4 border border-zinc-800 space-y-3">
+                  <h4 className="font-bold text-xs text-sky-400 flex items-center gap-2">
+                    <BookOpen className="w-4 h-4" />
+                    <span>خطوات البناء الرسمية لمستودع DrKLO/Telegram والحصول على APK:</span>
+                  </h4>
+
+                  <div className="space-y-2 text-[11px]">
+                    <div className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800 space-y-1">
+                      <span className="font-bold text-amber-300 block">🛠️ 1. التحضيرات المسبقة (Prerequisites):</span>
+                      <ul className="list-disc list-inside text-zinc-400 text-[10px] space-y-0.5">
+                        <li>Android Studio: الإصدار 2025.1.4</li>
+                        <li>Android NDK: الإصدار 27.2.12479018</li>
+                        <li>Android SDK: الإصدار 35 (API Level 35)</li>
+                        <li>Git: لاستنساخ الكود المصدري</li>
+                      </ul>
+                    </div>
+
+                    <div className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800 space-y-1">
+                      <span className="font-bold text-sky-300 block">📥 2. استنساخ الكود المصدري (Clone Source Code):</span>
+                      <div className="bg-black/50 p-2 rounded-lg font-mono text-[10px] text-zinc-300 dir-ltr text-left">
+                        git clone --recursive --shallow-submodules https://github.com/DrKLO/Telegram.git Telegram
+                      </div>
+                    </div>
+
+                    <div className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800 space-y-1">
+                      <span className="font-bold text-emerald-300 block">⚙️ 3. التهيئة والإعدادات (Configuration):</span>
+                      <p className="text-zinc-400 text-[10px]">
+                        • مفتاح التوقيع: انسخ ملف <code className="text-sky-300">release.keystore</code> إلى مجلد <code className="text-sky-300">TMessagesProj/config/</code>
+                      </p>
+                      <p className="text-zinc-400 text-[10px]">
+                        • بيانات الاعتماد في <code className="text-sky-300">gradle.properties</code>:
+                      </p>
+                      <div className="bg-black/50 p-2 rounded-lg font-mono text-[10px] text-zinc-300 dir-ltr text-left">
+                        RELEASE_KEY_PASSWORD=772997043a**<br/>
+                        RELEASE_KEY_ALIAS=Telegram_Anwer<br/>
+                        RELEASE_STORE_PASSWORD=772997043a**
+                      </div>
+                      <p className="text-zinc-400 text-[10px]">
+                        • ملف Firebase: ضع <code className="text-sky-300">google-services.json</code> في مجلد <code className="text-sky-300">TMessagesProj/</code>
+                      </p>
+                      <p className="text-zinc-400 text-[10px]">
+                        • ملف <code className="text-sky-300">TMessagesProj/src/main/java/org/telegram/messenger/BuildVars.java</code>:
+                      </p>
+                      <div className="bg-black/50 p-2 rounded-lg font-mono text-[10px] text-zinc-300 dir-ltr text-left">
+                        public static int APP_ID = 22043994;<br/>
+                        public static String APP_HASH = "56f64582b363d367280db96586b97801";<br/>
+                        public static String APP_NAME = "Telegram_Anwer";
+                      </div>
+                    </div>
+
+                    <div className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800 space-y-1">
+                      <span className="font-bold text-purple-300 block">🚀 4. بناء التطبيق (Compilation):</span>
+                      <div className="bg-black/50 p-2 rounded-lg font-mono text-[10px] text-zinc-300 dir-ltr text-left space-y-0.5">
+                        <div># نسخة Debug للتطوير:</div>
+                        <div className="text-emerald-400">./gradlew TMessagesProj:assembleDebug</div>
+                        <div># نسخة Release الموقعة للإصدار:</div>
+                        <div className="text-emerald-400">./gradlew TMessagesProj:assembleRelease</div>
+                      </div>
+                    </div>
+
+                    <div className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800 space-y-1">
+                      <span className="font-bold text-rose-300 block">📱 5. مسار ملفات الـ APK الناتجة:</span>
+                      <div className="bg-black/50 p-2 rounded-lg font-mono text-[10px] text-sky-300 dir-ltr text-left">
+                        TMessagesProj/build/outputs/apk/release/Telegram_Anwer_v12.9.2_arm64-v8a.apk
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
 
               </div>
             )}
@@ -1044,6 +1130,115 @@ export const TelegramApkInstallModal: React.FC<TelegramApkInstallModalProps> = (
                     {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                     <span>{copiedLink ? 'تم النسخ' : 'نسخ الرابط المباشر'}</span>
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* ═══ TAB 6: GITHUB ACTIONS CI/CD PIPELINE ═══ */}
+            {activeTab === 'github' && (
+              <div className="space-y-4">
+                <div className="bg-gradient-to-r from-purple-950/40 via-zinc-950 to-zinc-950 p-4 rounded-2xl border border-purple-800/40 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-sm text-purple-300 flex items-center gap-2">
+                      <GitBranch className="w-4 h-4 text-purple-400" />
+                      <span>المستودع المستهدف: anwer1230/Telegram_pro</span>
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                      GitHub Actions جاهز 🚀
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400 leading-relaxed">
+                    تم إعداد ملف سير العمل <code className="text-purple-300 font-mono">.github/workflows/build.yml</code> لبناء حزمة APK وتوقيعها آلياً على سيرفرات GitHub بدون الحاجة لتثبيت بيئة أندرويد على جهازك.
+                  </p>
+                </div>
+
+                {/* Secrets Guide */}
+                <div className="bg-zinc-950 rounded-2xl p-4 border border-zinc-800 space-y-2.5">
+                  <h4 className="font-bold text-xs text-amber-300 flex items-center gap-2">
+                    <Key className="w-4 h-4 text-amber-400" />
+                    <span>الأكواد السرية المطلوبة في GitHub (Repository Secrets):</span>
+                  </h4>
+                  <p className="text-[10px] text-zinc-400">
+                    انتقل إلى: <code className="text-sky-300">Settings &gt; Secrets and variables &gt; Actions</code> وأضف المتغيرات التالية:
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                    <div className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800 space-y-1 font-mono">
+                      <span className="text-sky-300 text-[10px] block">RELEASE_KEY_ALIAS</span>
+                      <span className="text-emerald-400 font-bold">Telegram_Anwer</span>
+                    </div>
+                    <div className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800 space-y-1 font-mono">
+                      <span className="text-sky-300 text-[10px] block">RELEASE_KEY_PASSWORD</span>
+                      <span className="text-amber-400 font-bold">772997043a**</span>
+                    </div>
+                    <div className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800 space-y-1 font-mono">
+                      <span className="text-sky-300 text-[10px] block">RELEASE_STORE_PASSWORD</span>
+                      <span className="text-amber-400 font-bold">772997043a**</span>
+                    </div>
+                    <div className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800 space-y-1 font-mono">
+                      <span className="text-sky-300 text-[10px] block">KEYSTORE_BASE64</span>
+                      <span className="text-purple-300 text-[10px] truncate block">[ملف release.keystore مشفر base64]</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Workflow file viewer */}
+                <div className="bg-zinc-950 rounded-2xl p-4 border border-zinc-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-sky-400 flex items-center gap-1.5">
+                      <FileCode className="w-4 h-4" />
+                      <span>محتوى ملف .github/workflows/build.yml:</span>
+                    </span>
+                  </div>
+                  <div className="bg-black/70 p-3 rounded-xl border border-zinc-800/80 font-mono text-[10px] text-zinc-300 max-h-48 overflow-y-auto dir-ltr text-left">
+                    <pre className="whitespace-pre">{`name: Build Telegram_Anwer APK
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - name: Install NDK 27.2.12479018
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager "ndk;27.2.12479018"
+      - name: Build Release APK
+        env:
+          RELEASE_STORE_PASSWORD: \${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: \${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: \${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: ./gradlew TMessagesProj:assembleRelease
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Telegram_Anwer_v12.9.2
+          path: TMessagesProj/build/outputs/apk/release/*.apk`}</pre>
+                  </div>
+                </div>
+
+                {/* Local Build Alternative */}
+                <div className="bg-zinc-950 rounded-2xl p-4 border border-zinc-800 space-y-2">
+                  <h4 className="font-bold text-xs text-emerald-400 flex items-center gap-1.5">
+                    <Terminal className="w-4 h-4" />
+                    <span>أمر البناء المحلي السريع (Local Terminal):</span>
+                  </h4>
+                  <div className="bg-black/70 p-2.5 rounded-xl border border-zinc-800 font-mono text-[11px] text-emerald-300 dir-ltr text-left">
+                    chmod +x gradlew && ./gradlew TMessagesProj:assembleRelease
+                  </div>
+                  <p className="text-[10px] text-zinc-400">
+                    مجلد المخرجات: <code className="text-sky-300">TMessagesProj/build/outputs/apk/release/Telegram_Anwer_v12.9.2_arm64-v8a.apk</code>
+                  </p>
                 </div>
               </div>
             )}

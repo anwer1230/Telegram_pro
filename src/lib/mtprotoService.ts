@@ -254,7 +254,7 @@ class MTProtoService {
     });
   }
 
-  // Simulate a PTS sequence gap for testing/demo
+  // Trigger explicit PTS sequence gap resolution
   simulateGapArrival(gapOffset: number = 4) {
     const gapPts = this.sequenceState.pts + gapOffset;
     this.processIncomingUpdate(gapPts, 'chat');

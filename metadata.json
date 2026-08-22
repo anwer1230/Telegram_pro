@@ -1,6 +1,7 @@
 {
   "name": "Telegram Web Unified",
-  "description": "تطبيق تيليجرام ويب الموحد والمتكامل مع دعم TDLib، المصادقة، الوسائط المتعددة، الأزرار التفاعلية، والأرشفة",
+  "description": "تطبيق تيليجرام الموحد والمتكامل مع دعم MTProto (API_ID: 22043994)، بناء وتثبيت حزمة Telegram_Anwer APK وفق مستودع DrKLO/Telegram، والمزامنة السحابية اللحظية",
   "requestFramePermissions": ["microphone", "camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
+
